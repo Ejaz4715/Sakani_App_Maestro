@@ -1,0 +1,26 @@
+# Helper: Home -> Vouchers rail -> See all -> voucher list (caller cold-starts the app)
+appId: fi.iwa.sakani
+name: Open the Sakani Voucher list
+---
+# No stopApp/launchApp here: helpers must not restart the app
+
+- runFlow:
+    file: ../../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+- scrollUntilVisible:
+    element:
+      text: "Vouchers"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- tapOn:
+    text: "See all"
+    index: 1
+
+# Arrival: title plus a filter chip, so a wrong See all (index 1) cannot pass
+- extendedWaitUntil:
+    visible: "Sakani Voucher"
+    timeout: 45000
+- assertVisible: "Sort by"

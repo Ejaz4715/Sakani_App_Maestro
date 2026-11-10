@@ -1,0 +1,65 @@
+# Home search: partial keyword finds the service; result opens its sheet
+# Read-only: the service CTA is never tapped
+appId: fi.iwa.sakani
+name: Home search - partial service keyword finds the service and opens its sheet
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+  SEARCH_SERVICE_TERM: '${typeof SEARCH_SERVICE_TERM === "undefined" ? "Mort" : String(SEARCH_SERVICE_TERM)}'
+  SEARCH_SERVICE_RESULT: '${typeof SEARCH_SERVICE_RESULT === "undefined" ? "Mortgage Calculator" : String(SEARCH_SERVICE_RESULT)}'
+  SEARCH_SERVICE_CTA: '${typeof SEARCH_SERVICE_CTA === "undefined" ? "Calculate Your Mortgage" : String(SEARCH_SERVICE_CTA)}'
+---
+- assertTrue:
+    condition: ${SEARCH_SERVICE_RESULT.toLowerCase().indexOf(SEARCH_SERVICE_TERM.toLowerCase()) >= 0}
+    label: "TEST DATA - SEARCH_SERVICE_RESULT must contain SEARCH_SERVICE_TERM"
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: subflows/open-home-search.yaml
+
+- tapOn:
+    leftOf: "Cancel"
+- inputText: ${SEARCH_SERVICE_TERM}
+- extendedWaitUntil:
+    visible: "Services"
+    timeout: 30000
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+# Expected service listed under Services
+- assertVisible:
+    text: ${"(?s)" + SEARCH_SERVICE_RESULT + ".*"}
+    below: "Services"
+- takeScreenshot: search-service-results
+
+# Select it - service sheet opens
+- tapOn:
+    text: ${"(?s)" + SEARCH_SERVICE_RESULT + ".*"}
+- extendedWaitUntil:
+    visible: ${SEARCH_SERVICE_CTA}
+    timeout: 30000
+- assertVisible:
+    text: ${SEARCH_SERVICE_RESULT}
+    above: ${SEARCH_SERVICE_CTA}
+- assertVisible: "(?s)Beneficiaries.*"
+- assertVisible: "(?s)Expected time.*"
+- takeScreenshot: search-service-destination
+
+# Back to results, then Cancel to Home
+- back
+- extendedWaitUntil:
+    visible: "Cancel"
+    timeout: 15000
+- assertNotVisible: ${SEARCH_SERVICE_CTA}
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 15000

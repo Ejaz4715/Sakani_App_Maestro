@@ -1,0 +1,10 @@
+# Open the Account tab from Home, handling the NPS survey (known defect).
+# Requires: DESTINATION - selector only the Account screen satisfies.
+appId: fi.iwa.sakani
+name: Open the Account tab
+---
+- runFlow:
+    file: tap-until-destination.yaml
+    env:
+      TARGET: 'Account\s*Tab 4 of 4'
+      DESTINATION: ${DESTINATION}

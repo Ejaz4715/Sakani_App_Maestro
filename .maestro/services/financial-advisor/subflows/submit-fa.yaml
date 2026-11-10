@@ -1,0 +1,30 @@
+# Certify and submit the FA form; caller asserts which outcome.
+# State-changing: real GetRecommendation/GetCertification call that writes profile data.
+appId: fi.iwa.sakani
+name: Certify and submit the Financial advisory form
+---
+- runFlow:
+    file: ../../../subflows/dismiss-keypad.yaml
+
+# Loop only while no outcome is shown, so Submit is never re-tapped after an outcome
+- repeat:
+    times: 3
+    while:
+      notVisible: "(?s)(Success!|We apologize|Error)"
+    commands:
+      # Certification checkbox is a blind toggle; tapped by point in the sticky footer
+      - tapOn:
+          point: "7%,82%"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn:
+          text: "Submit"
+          optional: true
+      # Wait for an outcome before toggling again (slow backend is not resubmitted)
+      - extendedWaitUntil:
+          visible: "(?s)(Success!|We apologize|Error)"
+          timeout: 90000
+          optional: true
+
+# Verify an outcome screen appeared
+- assertVisible: "(?s)(Success!|We apologize|Error)"

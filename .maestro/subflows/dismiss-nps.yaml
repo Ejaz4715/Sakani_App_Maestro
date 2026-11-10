@@ -1,0 +1,52 @@
+# Handle the NPS survey (known defect): rate 5, Submit, close the thank-you.
+# Safety: never taps anything while a product error is showing.
+appId: fi.iwa.sakani
+name: Answer the NPS survey with rating 5 if it is on screen
+---
+- runFlow:
+    when:
+      visible: "(?s).*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*"
+    commands:
+      - runFlow:
+          when:
+            notVisible: '(?s)(.*There.s something wrong.*|.*the service is down.*|Error!)'
+          commands:
+            # No ternary: "? " / ": " would break YAML parsing.
+            - evalScript: ${output.npsCount = (output.npsCount || 0) + 1}
+            - evalScript: "${console.log('NPS KNOWN DEFECT - answering with rating 5, occurrence ' + output.npsCount)}"
+            - tapOn:
+                text: "5"
+                below:
+                  text: "(?s).*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*"
+            - tapOn: "Submit"
+            # Wait for the confirmation (bounded, non-failing)
+            - repeat:
+                times: 4
+                while:
+                  notVisible: "Thank you for your feedback"
+                commands:
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+            # Evidence screenshot on first occurrence
+            - runFlow:
+                when:
+                  true: ${output.npsCount === 1}
+                commands:
+                  - runFlow:
+                      when:
+                        visible: "Thank you for your feedback"
+                      commands:
+                        - takeScreenshot: nps-rating-5-thank-you
+
+# Close the confirmation wherever it is found
+- runFlow:
+    when:
+      visible: "Thank you for your feedback"
+    commands:
+      - evalScript: "${console.log('NPS - closing the thank-you confirmation')}"
+      - tapOn:
+          # Title is "Rate Us" on newer builds, "Rate our App" before
+          leftOf: "Rate (our App|Us)"
+          retryTapIfNoChange: false
+      - waitForAnimationToEnd:
+          timeout: 4000

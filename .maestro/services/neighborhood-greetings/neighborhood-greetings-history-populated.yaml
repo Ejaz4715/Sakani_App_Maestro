@@ -1,0 +1,62 @@
+# TC-014: History with a real sent greeting opens, filters and tracks it (read-only)
+# Requires --env NATIONAL_ID=<account with at least one sent greeting>
+appId: fi.iwa.sakani
+name: SAKANI-38946-TC-014 History lists the real sent greeting and opens its tracker
+tags: [sakani-38946, neighborhood-greetings, service, functional, needs-greeting-history, health-check]
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "" : String(NATIONAL_ID)}'
+---
+- assertTrue:
+    condition: ${String(NATIONAL_ID).length === 10 && String(NATIONAL_ID) !== "1000011487"}
+    label: "Pass an account with a sent greeting via --env NATIONAL_ID (not the suite account 1000011487)"
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/dismiss-late-survey.yaml
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+- runFlow:
+    file: subflows/open-header-screen.yaml
+    env:
+      POINT: "80%,9%"
+      DESTINATION: "History"
+
+# All tab: at least one real sent greeting (this is the test-data precondition)
+- extendedWaitUntil:
+    visible: "(?s).*You sent a greeting.*To [0-9]+.*"
+    timeout: 30000
+    label: "BLOCKED - TEST DATA - no sent greeting in History for ${NATIONAL_ID}"
+- takeScreenshot: sakani-38946-tc-014-01-all
+
+# Greetings tab lists the record
+- tapOn: '(?s)Greetings\s*Tab 2 of 3'
+- extendedWaitUntil:
+    visible: "(?s).*You sent a greeting.*To [0-9]+.*"
+    timeout: 20000
+- takeScreenshot: sakani-38946-tc-014-02-greetings
+
+# Events tab opens (selected tab; its content is not validated)
+- tapOn: '(?s)Events\s*Tab 3 of 3'
+- extendedWaitUntil:
+    visible:
+      text: '(?s)Events\s*Tab 3 of 3'
+      selected: true
+    timeout: 20000
+- takeScreenshot: sakani-38946-tc-014-03-events
+
+# Open the record's tracker, then close it
+- tapOn: '(?s)All\s*Tab 1 of 3'
+- extendedWaitUntil:
+    visible: "(?s).*You sent a greeting.*"
+    timeout: 20000
+- tapOn: "(?s).*You sent a greeting.*"
+- extendedWaitUntil:
+    visible: "Track message"
+    timeout: 20000
+- assertVisible: "Message opened"
+- assertVisible: "Interacted"
+- takeScreenshot: sakani-38946-tc-014-04-track-message
+- tapOn: "Scrim"
+- extendedWaitUntil:
+    notVisible: "Track message"
+    timeout: 15000

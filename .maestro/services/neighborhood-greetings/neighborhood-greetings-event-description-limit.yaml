@@ -1,0 +1,44 @@
+# TC-009: event description editor caps the stored text and drops the overflow
+appId: fi.iwa.sakani
+name: SAKANI-38946-TC-009 Event description caps its stored text and drops the overflow
+tags: [sakani-38946, neighborhood-greetings, service, functional, health-check]
+---
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+- runFlow:
+    file: subflows/open-create-chooser.yaml
+- runFlow:
+    file: subflows/open-create-event-form.yaml
+
+# Open the description editor (workaround: re-tap while an early tap is ignored)
+- repeat:
+    times: 3
+    while:
+      notVisible: "(?s).*Write the event description here.*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "(?s).*Description.*"
+          optional: true
+      - extendedWaitUntil:
+          visible: "(?s).*Write the event description here.*"
+          timeout: 15000
+          optional: true
+- assertVisible: "(?s).*Write the event description here.*"
+- takeScreenshot: sakani-38946-tc-009-description-editor
+
+# Type 162 chars: 150 digits plus an end marker
+- tapOn:
+    point: "50%,22%"
+- inputText: "123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890MARKER170END"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Verify the first 150 characters are kept
+- assertVisible: "(?s).*123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890.*"
+# ...and the overflow after 150 (marker) is dropped
+- assertNotVisible: "(?s).*MARKER170END.*"
+- takeScreenshot: sakani-38946-tc-009-description-capped

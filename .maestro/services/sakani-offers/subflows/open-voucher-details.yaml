@@ -1,0 +1,20 @@
+# Helper: open a voucher's details page (read-only). Env: OFFER_NAME (card text)
+# Workaround: taps while the list settles are ignored; re-tap while details are absent
+appId: fi.iwa.sakani
+name: Open a voucher's details page
+---
+- repeat:
+    times: 3
+    while:
+      notVisible: "How to get this offer"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: ${"(?s).*" + OFFER_NAME + ".*"}
+          optional: true
+      - extendedWaitUntil:
+          visible: "How to get this offer"
+          timeout: 20000
+          optional: true
+- assertVisible: "How to get this offer"

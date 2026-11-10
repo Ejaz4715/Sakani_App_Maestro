@@ -1,0 +1,100 @@
+# SAKANI-51392-TC-004: with an Active MOH Financial Application, Confirm cancellation of the Ready Made
+# booking is BLOCKED (message per SAKANI-51392 dev comment: "Financial Application detected!" /
+# "Sorry, you cannot cancel this booking as you already have a financial application.") and the
+# booking stays Active. Suite: cancel-ready-made.
+# writes-data + double gate: taps Confirm cancellation ONCE, only with MOH_FA_CONFIRMED=true (+ evidence)
+# AND CANCEL_FINAL_APPROVED=true. If the block does not happen the booking IS cancelled (product
+# defect) - never retried. NOT EXECUTED as of 19/10/2026 (MOH record not confirmed, no final approval).
+# Live wording of the block message was never observed: the assertion keys on "financial application"
+# and the business outcome (booking still Active) is the pass condition.
+appId: fi.iwa.sakani
+name: SAKANI-51392-TC-004 Active MOH Financial Application blocks Ready Made cancellation (booking stays Active)
+tags:
+  - sakani-51392
+  - cancel-ready-made
+  - service
+  - functional
+  - health-check
+  - writes-data
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1119880062" : String(NATIONAL_ID)}'
+  READY_MADE_PROJECT: '${typeof READY_MADE_PROJECT === "undefined" ? "Target Segment test 22" : String(READY_MADE_PROJECT)}'
+  READY_MADE_UNIT: '${typeof READY_MADE_UNIT === "undefined" ? "Apartment 190-113" : String(READY_MADE_UNIT)}'
+  BOOKING_UNIT_CODE: '${typeof BOOKING_UNIT_CODE === "undefined" ? "03-01-0030-190-113" : String(BOOKING_UNIT_CODE)}'
+  BOOKING_DATE: '${typeof BOOKING_DATE === "undefined" ? "19/10/2026" : String(BOOKING_DATE)}'
+  READY_MADE_BLOCK: '${typeof READY_MADE_BLOCK === "undefined" ? "190" : String(READY_MADE_BLOCK)}'
+  READY_MADE_APARTMENT: '${typeof READY_MADE_APARTMENT === "undefined" ? "113" : String(READY_MADE_APARTMENT)}'
+  READY_MADE_BUILDING: '${typeof READY_MADE_BUILDING === "undefined" ? "2" : String(READY_MADE_BUILDING)}'
+  READY_MADE_FLOOR: '${typeof READY_MADE_FLOOR === "undefined" ? "2" : String(READY_MADE_FLOOR)}'
+  MOH_FA_CONFIRMED: '${typeof MOH_FA_CONFIRMED === "undefined" ? "false" : String(MOH_FA_CONFIRMED)}'
+  MOH_FA_EVIDENCE: '${typeof MOH_FA_EVIDENCE === "undefined" ? "" : String(MOH_FA_EVIDENCE)}'
+  CANCEL_REASON: '${typeof CANCEL_REASON === "undefined" ? "Reject by bank" : String(CANCEL_REASON)}'
+  # Explicit per-run approval of the single committing tap
+  CANCEL_FINAL_APPROVED: '${typeof CANCEL_FINAL_APPROVED === "undefined" ? "false" : String(CANCEL_FINAL_APPROVED)}'
+---
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+# Both gates are checked before the app is even launched
+- assertTrue:
+    condition: ${String(MOH_FA_CONFIRMED) === "true" && String(MOH_FA_EVIDENCE).trim().length > 0}
+    label: "BLOCKED - TEST DATA / BACKEND PREREQUISITE - Active MOH Financial Application not confirmed for ${NATIONAL_ID}; nothing tapped"
+- assertTrue:
+    condition: ${String(CANCEL_FINAL_APPROVED) === "true"}
+    label: "BLOCKED AT FINAL ACTION - SAFE EXECUTION LIMIT - Confirm cancellation needs explicit approval (CANCEL_FINAL_APPROVED=true); nothing tapped"
+
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: subflows/verify-prepared-booking.yaml
+- runFlow:
+    file: subflows/open-prepared-booking-details.yaml
+- runFlow:
+    file: subflows/moh-financial-application-gate.yaml
+- runFlow:
+    file: subflows/open-cancellation-reason.yaml
+
+# ===== COMMIT: the single approved Confirm cancellation (never re-tapped) =====
+- evalScript: "${console.log('SAKANI-51392 TC-004 - tapping Confirm cancellation ONCE for ' + BOOKING_UNIT_CODE + ' (MOH evidence: ' + MOH_FA_EVIDENCE + ')')}"
+- tapOn:
+    text: "Confirm cancellation"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "(?s)(.*[Ff]inancial [Aa]pplication.*|.*has been cancelled successfully.*|.*booking fee is not refunded.*|.*There.s something wrong.*)"
+    timeout: 60000
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: sakani-51392-tc-004-after-confirm-cancellation
+
+# A second (fee) confirmation is never answered
+- assertNotVisible:
+    text: "(?s).*booking fee is not refunded.*"
+    label: "STOP - a second cancellation confirmation appeared; not answered (needs explicit approval)"
+# Defect path: the booking was cancelled
+- assertNotVisible:
+    text: "(?s).*has been cancelled successfully.*"
+    label: "PRODUCT DEFECT - Ready Made booking ${BOOKING_UNIT_CODE} was CANCELLED despite an Active MOH Financial Application"
+# SAKANI-51838 regression: no redirect to Financial advisory / endless loader
+- assertNotVisible:
+    text: "Purchasing power"
+    label: "PRODUCT DEFECT (SAKANI-51838 regression) - redirected to Financial advisory instead of the block message"
+- assertVisible:
+    text: "(?s).*[Ff]inancial [Aa]pplication.*"
+    label: "UNEXPECTED - no Financial Application block message after Confirm cancellation"
+- copyTextFrom: "(?s).*[Ff]inancial [Aa]pplication.*"
+- evalScript: "${console.log('SAKANI-51392 TC-004 BLOCK MESSAGE (live wording) [' + String(maestro.copiedText).replace(/\\n/g, ' | ') + ']')}"
+- takeScreenshot: sakani-51392-tc-004-block-message
+
+# Business outcome: the booking is still Active (fresh read after relaunch, no dismissal tap needed)
+- stopApp
+- launchApp
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: subflows/verify-prepared-booking.yaml
+- evalScript: "${console.log('SAKANI-51392 TC-004 END - cancellation blocked and booking ' + BOOKING_UNIT_CODE + ' is still Active')}"

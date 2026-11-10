@@ -1,0 +1,54 @@
+# E2E-001: Home -> marketplace unit -> Unit Details -> calculator -> fill -> calculate -> result
+# Read-only journey; never touch the unit page booking/reservation controls
+appId: fi.iwa.sakani
+name: SAKANI-32007-E2E-001 Mortgage Calculator end-to-end - unit to estimated monthly instalment
+tags:
+  - sakani-32007
+  - mortgage-calculator
+  - e2e
+  - service
+  - release-readiness
+env:
+  PRICE: '${typeof PRICE === "undefined" ? "1000000" : PRICE}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : INCOME}'
+  OBLIGATIONS: '${typeof OBLIGATIONS === "undefined" ? "2000" : OBLIGATIONS}'
+  YEARS: '${typeof YEARS === "undefined" ? "20" : YEARS}'
+  RATE: '${typeof RATE === "undefined" ? "5" : RATE}'
+  DOWN_PAYMENT: '${typeof DOWN_PAYMENT === "undefined" ? "10" : DOWN_PAYMENT}'
+---
+# Start: cold start and assert authenticated Home
+- stopApp
+- launchApp
+
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+# Fail here if the session expired or Home never painted
+- assertVisible: 'Home\s*Tab 1 of 4'
+
+# 1. Open the calculator from a marketplace unit
+- runFlow:
+    file: subflows/open-mortgage-calculator.yaml
+
+# 2. Fill valid financial data
+- runFlow:
+    file: subflows/fill-calculator-form.yaml
+    env:
+      PRICE: ${PRICE}
+      INCOME: ${INCOME}
+      OBLIGATIONS: ${OBLIGATIONS}
+      YEARS: ${YEARS}
+      RATE: ${RATE}
+      DOWN_PAYMENT: ${DOWN_PAYMENT}
+
+# 3. Calculate (CTA enabled state is unreliable, defect D-3)
+- tapOn: "Calculate Your Mortgage"
+- extendedWaitUntil:
+    visible: "(?s).*Mortgage Calculator Result.*"
+    timeout: 45000
+
+# End point: result screen with a monthly payment
+- assertVisible: "Monthly payment"
+- assertVisible: "/Month"
+- takeScreenshot: sakani-32007-e2e-001-END-POINT-result

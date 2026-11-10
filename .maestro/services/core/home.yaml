@@ -1,0 +1,95 @@
+# Home regression - READ-ONLY: HOME-001/005/006, NAV-001
+# Guest half on a cleared launch, then authenticated half
+appId: fi.iwa.sakani
+name: Home - HOME-001 tabs, HOME-005 featured unit, NAV-001 back navigation, HOME-006 personalisation
+tags:
+  - health-check
+env:
+  # Test account
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('HOME.YAML TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+
+# Guest Home after cleared launch
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "(?s).*Login / Sign up.*"
+
+# HOME-001: four tabs
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 30000
+- assertVisible: 'Explore\s*Tab 2 of 4'
+- assertVisible: 'Services\s*Tab 3 of 4'
+- assertVisible: 'Account\s*Tab 4 of 4'
+
+# Home rendered content
+- assertVisible: "Quick Access"
+
+# HOME-005: featured unit opens Unit Details (UNIT-001, UNIT-006)
+
+- scrollUntilVisible:
+    element:
+      text: 'Discover featured unit in the market\s*'
+    direction: DOWN
+    timeout: 30000
+
+# Featured card targeted by position below the section subtitle
+- tapOn:
+    below:
+      text: 'Discover featured unit in the market\s*'
+
+# Unit Details loaded with regulatory badge
+- extendedWaitUntil:
+    visible: "Mortgage Calculator"
+    timeout: 30000
+- assertVisible: "Reserve unit"
+- assertVisible: "(?s).*(Approved by Wafi|Licensed by).*"
+
+# NAV-001: Android Back unwinds each drill-down
+# Wallet excluded (known defect D-31: Back does not work there)
+- back
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 30000
+- assertVisible: "Quick Access"
+- assertNotVisible: "Reserve unit"
+
+# HOME-006 guest half: sign-in offered, nobody greeted
+- tapOn: 'Home\s*Tab 1 of 4'
+- extendedWaitUntil:
+    visible: "(?s).*Login / Sign up.*"
+    timeout: 30000
+# No named greeting on guest Home
+- assertNotVisible: '(?si)(Good (morning|afternoon|evening).*|Hello,\s*\S.*)'
+
+# Login with test account
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# HOME-006 authenticated half: named greeting (NPS handled)
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+- assertVisible:
+    text: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+    above:
+      text: 'Home\s*Tab 1 of 4'
+      selected: true
+
+# Guest entry point is gone
+- assertNotVisible: "(?s).*Login / Sign up.*"
+
+# NAV-003: bottom nav still present after sign-in
+- assertVisible: 'Home\s*Tab 1 of 4'
+- assertVisible: 'Explore\s*Tab 2 of 4'
+- assertVisible: 'Services\s*Tab 3 of 4'
+- assertVisible: 'Account\s*Tab 4 of 4'

@@ -1,0 +1,63 @@
+# UNIT-005 - Unit Details exposes Reserve unit for an eligible logged-in account
+# Safety: the Reserve unit CTA is never tapped (would start a reservation)
+appId: fi.iwa.sakani
+name: UNIT-005 Unit Details exposes Reserve CTA
+tags:
+  - health-check
+env:
+  # Test account (must be eligible; Villa B91-360 must still expose Reserve unit)
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('UNIT.YAML TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+
+# Login with test account
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# Verify eligibility status via Account
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Eligibility checker status.*"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "(?s).*Eligibility checker status\\s*Eligible.*"
+
+# Back to authenticated Home
+- runFlow:
+    file: ../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Home\s*Tab 1 of 4'
+      DESTINATION: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+
+# Route: Home featured section - View all/View Details - the unit
+- scrollUntilVisible:
+    element:
+      text: '(Discover featured unit in the market|Featured unit in mobile dashboard)\s*'
+    direction: DOWN
+    timeout: 45000
+- tapOn: "(View all|View Details)"
+
+- extendedWaitUntil:
+    visible: "(?s).*Place of featured units.*"
+    timeout: 45000
+- tapOn: "(?s).*Villa B91-360.*"
+
+# Unit Details loaded
+- extendedWaitUntil:
+    visible: "Mortgage Calculator"
+    timeout: 30000
+- assertVisible: "(?s).*Villa B91-360.*"
+- assertVisible: "(?s).*(Approved by Wafi|Licensed by).*"
+
+# UNIT-005: booking entry point exposed, not tapped
+- assertVisible: "Reserve unit"

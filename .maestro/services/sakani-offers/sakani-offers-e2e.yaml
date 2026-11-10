@@ -1,0 +1,71 @@
+# E2E: open Offers, open a voucher, copy its code, open the share sheet
+# Stop before redeeming: never taps Go to website or a share target
+appId: fi.iwa.sakani
+name: SAKANI-31966-E2E-001 Sakani Offers end-to-end - discover, open, copy and share a voucher
+tags:
+  - sakani-31966
+  - sakani-offers
+  - e2e
+  - service
+  - release-readiness
+env:
+  OFFER_NAME: '${typeof OFFER_NAME === "undefined" ? "Test Company name EN" : OFFER_NAME}'
+---
+# Cold start and open the voucher list (keeps the session)
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-voucher-list.yaml
+
+# Verify the catalogue loaded real content
+- assertVisible: "Sakani Voucher"
+- assertVisible: "Coupon Category"
+- assertVisible: "(?s).*% off.*"
+- assertNotVisible: "(?s).*(There's something wrong|Please try again later).*"
+- takeScreenshot: sakani-31966-e2e-001-01-catalogue-loaded
+
+# Open voucher details
+- runFlow:
+    file: subflows/open-voucher-details.yaml
+    env:
+      OFFER_NAME: ${OFFER_NAME}
+
+# Verify key offer information
+- assertVisible: "(?s).*% off.*"
+- assertVisible: "(?s)Expiry date: [0-9]{2}/[0-9]{2}/[0-9]{4}"
+- assertVisible: "(?s)[0-9]+ customers viewed this voucher"
+- assertVisible: "How to get this offer"
+- takeScreenshot: sakani-31966-e2e-001-02-offer-details
+
+# Verify CTAs
+- assertVisible: "Go to website"
+
+# Copy the code (code box addressed by position)
+- tapOn:
+    below: "(?s)[0-9]+ customers viewed this voucher"
+    above: "Go to website"
+
+# Verify Copied (transient)
+- extendedWaitUntil:
+    visible: "(?s).*Copied.*"
+    timeout: 15000
+- takeScreenshot: sakani-31966-e2e-001-03-code-copied
+
+# Open the share sheet (unlabelled header icon); no share target is ever selected
+- tapOn:
+    point: "92%,8%"
+- extendedWaitUntil:
+    visible: "Sharing link"
+    timeout: 20000
+# Verify the voucher deep link, then close the sheet
+- assertVisible: "(?s).*/app/promotion-vouchers/.*"
+- takeScreenshot: sakani-31966-e2e-001-04-share-sheet
+- back
+
+# Final state: back on the offer, still redeemable
+- extendedWaitUntil:
+    visible: "How to get this offer"
+    timeout: 30000
+- assertVisible: "Go to website"
+- assertVisible: "(?s)Expiry date: [0-9]{2}/[0-9]{2}/[0-9]{4}"
+- takeScreenshot: sakani-31966-e2e-001-05-final-state

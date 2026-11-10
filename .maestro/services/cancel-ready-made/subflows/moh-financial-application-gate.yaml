@@ -1,0 +1,13 @@
+# Helper (SAKANI-51392): gate on the Active MOH Financial Application prerequisite.
+# The mobile app does not expose this record (19/10/2026: "Financial applications" and "Online lending
+# requests" open an unauthenticated web view with no data), so it cannot be read here. It is attested
+# from the backend: MOH_FA_CONFIRMED=true only after the record (MOH CHECK_MOH_FIN_APP_STATUS EXIST=1)
+# is verified for NATIONAL_ID, with MOH_FA_EVIDENCE naming where it was verified.
+# Never inferred from Financial Advisory. Requires: NATIONAL_ID, MOH_FA_CONFIRMED, MOH_FA_EVIDENCE.
+appId: fi.iwa.sakani
+name: Gate on the Active MOH Financial Application prerequisite
+---
+- evalScript: "${console.log('SAKANI-51392 MOH FINANCIAL APPLICATION GATE - NATIONAL_ID [' + NATIONAL_ID + '] MOH_FA_CONFIRMED [' + MOH_FA_CONFIRMED + '] evidence [' + MOH_FA_EVIDENCE + ']')}"
+- assertTrue:
+    condition: ${String(MOH_FA_CONFIRMED) === "true" && String(MOH_FA_EVIDENCE).trim().length > 0}
+    label: "BLOCKED - TEST DATA / BACKEND PREREQUISITE - Active MOH Financial Application not confirmed for ${NATIONAL_ID}; Cancel booking not tapped"

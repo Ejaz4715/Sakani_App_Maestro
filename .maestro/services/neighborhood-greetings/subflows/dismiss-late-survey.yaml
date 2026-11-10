@@ -1,0 +1,15 @@
+# Helper: dismiss a satisfaction survey that slides up late (never submits feedback)
+appId: fi.iwa.sakani
+name: Dismiss a late satisfaction survey
+---
+- extendedWaitUntil:
+    visible: "(?s).*how satisfied are you.*"
+    timeout: 30000
+    optional: true
+- runFlow:
+    when:
+      visible: "(?s).*how satisfied are you.*"
+    commands:
+      - tapOn: "Dismiss"
+      - waitForAnimationToEnd:
+          timeout: 3000

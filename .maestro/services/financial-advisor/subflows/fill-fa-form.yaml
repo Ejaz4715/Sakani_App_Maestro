@@ -1,0 +1,171 @@
+# Open the FA form and fill every field. Stops before Submit (see submit-fa.yaml).
+# Env: EMPLOYMENT, SALARY_BANK, amounts, PRODUCT_TYPE; inputs bracketed between labels.
+appId: fi.iwa.sakani
+name: Fill the Financial advisory form
+# Guarded defaults so a caller's env can override them
+env:
+  EMPLOYMENT: '${typeof EMPLOYMENT === "undefined" ? "Civil - Government Sector" : EMPLOYMENT}'
+  SALARY_BANK: '${typeof SALARY_BANK === "undefined" ? "Bank Albilad" : SALARY_BANK}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : INCOME}'
+  HOUSING_ALLOWANCE: '${typeof HOUSING_ALLOWANCE === "undefined" ? "2000" : HOUSING_ALLOWANCE}'
+  OTHER_ALLOWANCES: '${typeof OTHER_ALLOWANCES === "undefined" ? "500" : OTHER_ALLOWANCES}'
+  COMMITMENTS: '${typeof COMMITMENTS === "undefined" ? "1000" : COMMITMENTS}'
+  COMMITMENT_MONTHS: '${typeof COMMITMENT_MONTHS === "undefined" ? "24" : COMMITMENT_MONTHS}'
+  DOWN_PAYMENT: '${typeof DOWN_PAYMENT === "undefined" ? "0" : DOWN_PAYMENT}'
+  SAVINGS: '${typeof SAVINGS === "undefined" ? "50000" : SAVINGS}'
+  PRODUCT_TYPE: '${typeof PRODUCT_TYPE === "undefined" ? "Market Ready Unit" : PRODUCT_TYPE}'
+---
+# Either CTA may be present; scroll to the top first so the tap hits it
+- repeat:
+    times: 5
+    commands:
+      - swipe:
+          start: "50%,30%"
+          end: "50%,85%"
+- waitForAnimationToEnd:
+    timeout: 2500
+
+- runFlow:
+    when:
+      visible: "Get recommendation"
+    commands:
+      - tapOn: "Get recommendation"
+- runFlow:
+    when:
+      visible: "Update my information"
+    commands:
+      - tapOn: "Update my information"
+
+# Verify the form opened ("Cancel" exists only on the form)
+- extendedWaitUntil:
+    visible: "Cancel"
+    timeout: 45000
+- assertVisible: "Type of Employment"
+
+# Dropdowns: open via the control, wait for "Scrim" (sheet open/closed)
+
+# Employment
+- tapOn:
+    below: "Type of Employment"
+    above: "Salary bank"
+- extendedWaitUntil:
+    visible: "Scrim"
+    timeout: 20000
+- tapOn: ${EMPLOYMENT + "\\s*"}
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 20000
+
+# Salary bank
+- tapOn:
+    below: "Salary bank"
+    above: "Income"
+- extendedWaitUntil:
+    visible: "Scrim"
+    timeout: 20000
+- tapOn: ${SALARY_BANK + "\\s*"}
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 20000
+
+# Amount fields (each value is read back and retyped if a key was dropped)
+
+# Income
+- scrollUntilVisible:
+    element:
+      text: "Monthly income"
+    direction: DOWN
+    timeout: 20000
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "Monthly income"
+      ABOVE: "Housing allowance"
+      VALUE: ${INCOME}
+      EXPECTED: ${"SAR " + Number(INCOME).toLocaleString("en-US")}
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "Housing allowance"
+      ABOVE: "Other allowances"
+      VALUE: ${HOUSING_ALLOWANCE}
+      EXPECTED: ${"SAR " + Number(HOUSING_ALLOWANCE).toLocaleString("en-US")}
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "Other allowances"
+      ABOVE: "Commitments"
+      VALUE: ${OTHER_ALLOWANCES}
+      EXPECTED: ${"SAR " + Number(OTHER_ALLOWANCES).toLocaleString("en-US")}
+
+# Commitments
+- scrollUntilVisible:
+    element:
+      text: "Monthly commitments"
+    direction: DOWN
+    timeout: 20000
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "Monthly commitments"
+      ABOVE: "Duration of commitments"
+      VALUE: ${COMMITMENTS}
+      EXPECTED: ${"SAR " + Number(COMMITMENTS).toLocaleString("en-US")}
+# Duration is a month count, not money-formatted
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "Duration of commitments"
+      ABOVE: "Down payment"
+      VALUE: ${COMMITMENT_MONTHS}
+      EXPECTED: ${String(COMMITMENT_MONTHS)}
+
+# Down payment
+- scrollUntilVisible:
+    element:
+      text: "The value of the down payment"
+    direction: DOWN
+    timeout: 20000
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "The value of the down payment"
+      ABOVE: "Savings"
+      VALUE: ${DOWN_PAYMENT}
+      EXPECTED: ${"SAR " + Number(DOWN_PAYMENT).toLocaleString("en-US")}
+
+# Savings
+- scrollUntilVisible:
+    element:
+      text: "Total financial saving"
+    direction: DOWN
+    timeout: 20000
+- runFlow:
+    file: set-amount-field.yaml
+    env:
+      BELOW: "Total financial saving"
+      ABOVE: "Products"
+      VALUE: ${SAVINGS}
+      EXPECTED: ${"SAR " + Number(SAVINGS).toLocaleString("en-US")}
+
+# Product type (bracket ends at the always-present footer sentence)
+# Centred so the sticky footer cannot intercept the tap
+- scrollUntilVisible:
+    element:
+      text: "Choose product type"
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
+- tapOn:
+    below: "Choose product type"
+    above: "I certify that the"
+- extendedWaitUntil:
+    visible: "Scrim"
+    timeout: 20000
+- tapOn: ${PRODUCT_TYPE + "\\s*"}
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 20000
+# Workaround: product picker can leave the keyboard open over the form
+- runFlow:
+    file: ../../../subflows/dismiss-keypad.yaml

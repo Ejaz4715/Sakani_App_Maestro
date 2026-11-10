@@ -1,0 +1,116 @@
+﻿# Edit Dashboard: remove the first active widget, prove it under Deactivated widgets, Confirm, then Reset + Confirm
+# writes-data: Remove 1, Confirm 1, Reset 1, Confirm 1 - none retried
+appId: fi.iwa.sakani
+name: Edit Dashboard - remove a widget, prove it deactivated, then Reset
+tags:
+  - health-check
+  - writes-data
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: subflows/open-edit-dashboard.yaml
+- takeScreenshot: dashboard-1-before
+
+# Capture the first active widget (first named row between the title and Deactivated widgets)
+# Maestro's below compares tops: the title row counts as below Reset, so anchor on the title itself
+- assertVisible:
+    text: ".+"
+    below: "Edit Dashboard"
+    above: "Deactivated widgets"
+    label: "BLOCKED - no active widget in Edit Dashboard"
+- copyTextFrom:
+    text: ".+"
+    below: "Edit Dashboard"
+    above: "Deactivated widgets"
+- evalScript: ${output.widget = maestro.copiedText}
+- assertTrue:
+    condition: '${["Edit Dashboard", "Reset", "Deactivated widgets", "No more widgets to show", "Confirm"].indexOf(output.widget) < 0}'
+    label: "BLOCKED - captured text is sheet chrome, not a widget name"
+- evalScript: "${console.log('EDIT DASHBOARD - widget selected: ' + output.widget)}"
+# Its Remove control is the unlabelled icon on the same row (no "Remove" text in the live UI)
+- assertVisible:
+    leftOf: ${output.widget}
+    below: "Edit Dashboard"
+    above: "Deactivated widgets"
+    label: "BLOCKED - the selected widget has no Remove control"
+
+# State-changing: Remove - exactly one tap
+- tapOn:
+    leftOf: ${output.widget}
+    below: "Edit Dashboard"
+    above: "Deactivated widgets"
+    retryTapIfNoChange: false
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertNotVisible:
+    text: ${output.widget}
+    below: "Edit Dashboard"
+    above: "Deactivated widgets"
+    label: "the selected widget is still in the active section after Remove"
+- takeScreenshot: dashboard-2-after-remove
+# Deactivated widgets is an accordion: expand it once if collapsed
+# Caret has no node of its own; it sits at ~37% of the row (row centre does not toggle)
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.widget}
+        below: "Deactivated widgets"
+    commands:
+      - tapOn:
+          text: "Deactivated widgets"
+          point: "37%,50%"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Same widget must be listed under Deactivated widgets (before any Confirm)
+- extendedWaitUntil:
+    visible:
+      text: ${output.widget}
+      below: "Deactivated widgets"
+    timeout: 10000
+    label: "PRODUCT - the removed widget is not listed under Deactivated widgets"
+- evalScript: "${console.log('EDIT DASHBOARD - ' + output.widget + ' listed under Deactivated widgets')}"
+
+# State-changing: first Confirm - exactly one tap
+- tapOn:
+    text: "Confirm"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    notVisible: "Deactivated widgets"
+    timeout: 15000
+- assertVisible: 'Home\s*Tab 1 of 4'
+- takeScreenshot: dashboard-3-confirmed
+
+# Reopen, then State-changing: Reset once and Confirm once
+- runFlow:
+    file: subflows/open-edit-dashboard.yaml
+- tapOn:
+    text: "Reset"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "No more widgets to show"
+    timeout: 10000
+- assertVisible:
+    text: ${output.widget}
+    below: "Edit Dashboard"
+    above: "Deactivated widgets"
+    label: "the removed widget is not back in the active section after Reset"
+- takeScreenshot: dashboard-4-reset
+- tapOn:
+    text: "Confirm"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    notVisible: "Deactivated widgets"
+    timeout: 15000
+- assertVisible: 'Home\s*Tab 1 of 4'
+- evalScript: "${console.log('EDIT DASHBOARD END - Reset confirmed; ' + output.widget + ' back in the active section')}"

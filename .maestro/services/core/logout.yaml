@@ -1,0 +1,99 @@
+# OUT-002 - Logging out clears the session (also OUT-001, OUT-003, ACC-021)
+# Security: relaunch re-checks guest state, not just the screen after logout
+appId: fi.iwa.sakani
+name: OUT-002 Logout clears session
+tags:
+  - health-check
+env:
+  # Test account
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('LOGOUT.YAML TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+
+# Login with test account
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# Open Account (handles NPS) and verify authenticated state
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- assertVisible: "My bookings"
+- assertNotVisible: "Log in"
+
+# OUT-002: scroll to Logout
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 30000
+
+- tapOn: "Log out"
+
+# OUT-001: logout asks for confirmation
+- extendedWaitUntil:
+    visible: "Are you sure you want to log out?"
+    timeout: 30000
+- assertVisible: "Cancel"
+
+# OUT-004: Cancel keeps the session
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Are you sure you want to log out?"
+    timeout: 30000
+
+# Still authenticated
+- assertVisible: "My bookings"
+- assertVisible: "Log out"
+- assertNotVisible: "Log in"
+
+# Re-raise the confirmation for OUT-002
+- tapOn: "Log out"
+- extendedWaitUntil:
+    visible: "Are you sure you want to log out?"
+    timeout: 30000
+- assertVisible: "Cancel"
+
+- tapOn: "Yes, log out"
+
+# Dismiss CSAT / NPS survey if shown after logout
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "Log in"
+
+# Session cleared: guest state and OUT-003 reduced menu
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 60000
+- assertVisible: "(?s).*create new account.*"
+# Help and Support label differs by build
+- assertVisible: "Help (and|&) Support"
+
+# Authenticated-only entries and named greeting are gone
+- assertNotVisible: "My bookings"
+- assertNotVisible: "Profile details"
+- assertNotVisible: "Preferences"
+- assertNotVisible: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+
+# Relaunch to prove the stored session was cleared
+- launchApp
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Account\s*Tab 4 of 4'
+- tapOn: 'Account\s*Tab 4 of 4'
+
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 60000
+- assertNotVisible: "My bookings"
+- assertNotVisible: "Profile details"
+- assertNotVisible: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'

@@ -1,0 +1,114 @@
+# Sign up a brand-new user on PRE and land on an authenticated Home.
+# Requires: NATIONAL_ID, PHONE, EMAIL, OTP; optional MIN_AGE_HIJRI_YEARS.
+appId: fi.iwa.sakani
+name: Register a new user (Nafath + contact details + OTP)
+---
+- assertTrue: ${typeof NATIONAL_ID !== "undefined" && String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+- runFlow:
+    file: clear-overlays.yaml
+    env:
+      ANCHOR: "(?s).*Login / Sign up.*"
+- tapOn: "(?s).*Login / Sign up.*"
+- extendedWaitUntil:
+    visible: "Continue with N[ae]fath"
+    timeout: 45000
+- tapOn: "Enter your ID, phone number,? or email"
+- inputText: ${NATIONAL_ID}
+- assertVisible: ${NATIONAL_ID}
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Login with nafath"
+    timeout: 45000
+# Safety: Nafath screen must show exactly this ID
+- assertVisible: ${NATIONAL_ID}
+- tapOn: "Confirm"
+
+# Registration 1 - Personal information
+- extendedWaitUntil:
+    visible: "Personal information"
+    timeout: 90000
+- assertVisible: "We populated the information based on your National ID/Iqama and DOB."
+- assertVisible:
+    text: ${NATIONAL_ID}
+    below: "National ID.*"
+
+# Read applicant DOB (read-only) and Hijri age
+- evalScript: ${output.applicantDobHijri = ''}
+- runFlow:
+    when:
+      visible:
+        text: "[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}"
+        below: "Date of Birth.*"
+    commands:
+      - copyTextFrom:
+          text: "[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}"
+          below: "Date of Birth.*"
+      - evalScript: ${output.applicantDobHijri = String(maestro.copiedText).trim()}
+- runScript: ../scripts/hijri-age.js
+- evalScript: "${console.log('REGISTRATION - applicant Date of Birth [' + output.applicantDobHijri + '] = ' + output.applicantAgeHijri + ' Hijri years (today ' + output.todayHijri + ')')}"
+
+# Stop point: too-young applicant stops here before any account is created
+- runFlow:
+    when:
+      true: ${typeof MIN_AGE_HIJRI_YEARS !== "undefined"}
+    commands:
+      - assertTrue:
+          condition: ${output.applicantAgeHijri >= 0}
+          label: "REGISTRATION - the applicant Date of Birth could not be read on Personal information"
+      - runFlow:
+          when:
+            true: ${!(output.applicantAgeHijri > Number(MIN_AGE_HIJRI_YEARS))}
+          commands:
+            - evalScript: "${console.log('TEST DATA BLOCKER - PRE returned applicant age [' + output.applicantAgeHijri + '] (DOB ' + output.applicantDobHijri + ') although the journey started inside the supported minute window; it must be older than ' + MIN_AGE_HIJRI_YEARS + '. Stopped on Personal information - no account was created.')}"
+      - assertTrue:
+          condition: ${output.applicantAgeHijri > Number(MIN_AGE_HIJRI_YEARS)}
+          label: "TEST DATA BLOCKER - PRE returned an applicant age (logged above) that is not older than MIN_AGE_HIJRI_YEARS although the journey started inside the supported minute window. Stopped on Personal information - no account was created."
+- tapOn: "Continue"
+
+# Registration 2 - phone + email
+# Workaround: Continue has no node; tapped by coordinates after screen check
+- extendedWaitUntil:
+    visible: "(?s).*Please fill in\\s+your mobile number detail and (optional to add )?email address.*"
+    timeout: 45000
+- tapOn: "Enter your phone number"
+- inputText: ${PHONE}
+- hideKeyboard
+- tapOn: "Enter your email"
+- inputText: ${EMAIL}
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: ${PHONE}
+- assertVisible: ${EMAIL}
+- assertNotVisible:
+    text: "(?s).*can.t be started with.*"
+    label: "REGISTRATION - the app rejected the generated phone number"
+- assertVisible: "(?s).*Please fill in\\s+your mobile number detail and (optional to add )?email address.*"
+- tapOn:
+    point: "50%,93%"
+    retryTapIfNoChange: false
+
+# Registration 3 - verification code
+# State-changing: OTP creates one real PRE account; do not retry
+- extendedWaitUntil:
+    visible: "Verification Code"
+    timeout: 45000
+    label: "REGISTRATION - contact details were not accepted (no Verification Code screen)"
+- tapOn:
+    text: "X"
+    index: 0
+- inputText: ${OTP}
+
+# Registration 4 - decline biometrics, continue to Home
+- runFlow:
+    file: clear-overlays.yaml
+    env:
+      ANCHOR: "Welcome! Your account is all set."
+- assertVisible: "Welcome! Your account is all set."
+- tapOn:
+    text: "Continue"
+    retryTapIfNoChange: false
+
+# Verify authenticated Home
+- runFlow:
+    file: post-login.yaml

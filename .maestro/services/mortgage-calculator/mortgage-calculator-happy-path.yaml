@@ -1,0 +1,36 @@
+# TC-001: Services -> Professional Services -> calculator -> fill -> calculate -> result
+appId: fi.iwa.sakani
+name: SAKANI-32007-TC-001 Happy path - calculator from Services returns a result
+tags:
+  - sakani-32007
+  - mortgage-calculator
+  - happy-path
+  - service
+  - functional
+  - health-check
+env:
+  PRICE: '${typeof PRICE === "undefined" ? "1000000" : String(PRICE)}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : String(INCOME)}'
+  OBLIGATIONS: '${typeof OBLIGATIONS === "undefined" ? "2000" : String(OBLIGATIONS)}'
+  YEARS: '${typeof YEARS === "undefined" ? "20" : String(YEARS)}'
+  RATE: '${typeof RATE === "undefined" ? "5" : String(RATE)}'
+  DOWN_PAYMENT: '${typeof DOWN_PAYMENT === "undefined" ? "10" : String(DOWN_PAYMENT)}'
+---
+# Cold start (stopApp keeps the authenticated session)
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-mortgage-calculator-from-services.yaml
+
+- runFlow:
+    file: subflows/fill-calculator-form.yaml
+
+# Calculate (CTA enabled state is unreliable, defect D-3)
+- tapOn: "Calculate Your Mortgage"
+- extendedWaitUntil:
+    visible: "(?s).*Mortgage Calculator Result.*"
+    timeout: 45000
+
+# End point: result screen with a monthly payment
+- assertVisible: "Monthly payment"
+- takeScreenshot: sakani-32007-tc-001-result

@@ -1,0 +1,33 @@
+# TC-008: create-event form marks mandatory fields and does not send while empty
+# Safety: never sends an invitation; Send is only tapped with mandatory fields empty
+appId: fi.iwa.sakani
+name: SAKANI-38946-TC-008 Create-event form marks mandatory fields and does not send while empty
+tags: [sakani-38946, neighborhood-greetings, service, functional, health-check]
+---
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+- runFlow:
+    file: subflows/open-create-chooser.yaml
+- runFlow:
+    file: subflows/open-create-event-form.yaml
+
+# Verify mandatory fields
+- assertVisible: "(?s).*Event name.*"
+- assertVisible: "(?s).*Start time.*"
+- assertVisible: "(?s).*Set Location.*"
+- assertVisible: "(?s).*Description.*"
+- assertVisible: "Preview"
+- assertVisible: "Send"
+- takeScreenshot: sakani-38946-tc-008-create-event-form
+
+# Tap Send with mandatory fields empty
+- tapOn: "Send"
+- waitForAnimationToEnd:
+    timeout: 8000
+# Verify still on the form and nothing was sent
+- assertVisible: "(?s).*Event name.*"
+- assertVisible: "Send"
+- assertNotVisible: "(?s).*(successfully|Thank you|has been sent|Invitation sent).*"
+- takeScreenshot: sakani-38946-tc-008-send-inert-while-empty

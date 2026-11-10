@@ -1,0 +1,54 @@
+# Home search: no-result state, clear icon resets to Recent searches, Cancel to Home
+appId: fi.iwa.sakani
+name: Home search - no-result state, clear resets to recent searches, Cancel to Home
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+  SEARCH_NO_RESULT_TERM: '${typeof SEARCH_NO_RESULT_TERM === "undefined" ? "zzzqqqxyz" : String(SEARCH_NO_RESULT_TERM)}'
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: subflows/open-home-search.yaml
+
+# No result
+- tapOn:
+    leftOf: "Cancel"
+- inputText: ${SEARCH_NO_RESULT_TERM}
+- extendedWaitUntil:
+    visible: ${"(?s)No result for ." + SEARCH_NO_RESULT_TERM + ".*"}
+    timeout: 30000
+- assertVisible: "Please check the spelling or try a new search"
+- assertNotVisible: "Trending Services"
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- takeScreenshot: search-no-result
+
+# Clear resets the search (clear icon has no node: coordinate tap)
+- tapOn:
+    point: "74%,10%"
+- extendedWaitUntil:
+    visible: "Recent searches"
+    timeout: 10000
+- assertNotVisible: "(?s)No result for .*"
+- assertVisible: "Trending Services"
+- assertVisible:
+    text: ${SEARCH_NO_RESULT_TERM}
+    below: "Recent searches"
+- takeScreenshot: search-cleared-recent
+
+# Cancel returns to Home
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 15000
+- assertVisible: "Looking for a property, service, or support?"

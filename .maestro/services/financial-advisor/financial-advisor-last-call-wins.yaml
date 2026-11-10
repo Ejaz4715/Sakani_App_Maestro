@@ -1,0 +1,97 @@
+# SAKANI-23300-TC-003: profile reflects the LAST of two advisory calls (product type).
+# Writes data: submits TWO real financial advisories back to back.
+appId: fi.iwa.sakani
+name: SAKANI-23300-TC-003 Beneficiary data reflects the last service call
+tags:
+  - sakani-23300
+  - financial-advisor
+  - service
+  - functional
+  - writes-data
+  - health-check
+env:
+  FIRST_PRODUCT: '${typeof FIRST_PRODUCT === "undefined" ? "Market Ready Unit" : String(FIRST_PRODUCT)}'
+  SECOND_PRODUCT: '${typeof SECOND_PRODUCT === "undefined" ? "Offplan" : String(SECOND_PRODUCT)}'
+---
+# Cold start (session is kept)
+- stopApp
+- launchApp
+
+# State-changing: call 1 - Market Ready Unit (GetRecommendation)
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+- runFlow:
+    file: subflows/fill-fa-form.yaml
+    env:
+      PRODUCT_TYPE: ${FIRST_PRODUCT}
+- assertVisible: ${FIRST_PRODUCT}
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- assertVisible: "(?s)I certify that the.*"
+# Certification checkbox has no node: proven footer point, tapped once
+- tapOn:
+    point: "7%,82%"
+- waitForAnimationToEnd:
+    timeout: 2000
+# Submit - exactly one tap, never retried
+- tapOn:
+    text: "Submit"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Success!"
+    timeout: 90000
+- tapOn: "(?s)(Done|Back)"
+
+# Verify the profile shows the first product (baseline)
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+- extendedWaitUntil:
+    visible: "Purchasing power"
+    timeout: 45000
+- scrollUntilVisible:
+    element:
+      text: "Product Type"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: ${FIRST_PRODUCT}
+- takeScreenshot: sakani-23300-tc-003-after-first-call
+
+# State-changing: call 2 - Offplan (GetCertification)
+- runFlow:
+    file: subflows/fill-fa-form.yaml
+    env:
+      PRODUCT_TYPE: ${SECOND_PRODUCT}
+- assertVisible: ${SECOND_PRODUCT}
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- assertVisible: "(?s)I certify that the.*"
+# Certification checkbox has no node: proven footer point, tapped once
+- tapOn:
+    point: "7%,82%"
+- waitForAnimationToEnd:
+    timeout: 2000
+# Submit - exactly one tap, never retried
+- tapOn:
+    text: "Submit"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Success!"
+    timeout: 90000
+- tapOn: "(?s)(Done|Back)"
+
+# Verify the profile reflects the second call only
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+- extendedWaitUntil:
+    visible: "Purchasing power"
+    timeout: 45000
+- assertVisible: "(?s)[0-9]{2}/[0-9]{2}/[0-9]{4} at [0-9]{1,2}:[0-9]{1,2}"
+- scrollUntilVisible:
+    element:
+      text: "Product Type"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: ${SECOND_PRODUCT}
+# ...and not the first (overwritten, not appended)
+- assertNotVisible: ${FIRST_PRODUCT}
+- takeScreenshot: sakani-23300-tc-003-after-second-call

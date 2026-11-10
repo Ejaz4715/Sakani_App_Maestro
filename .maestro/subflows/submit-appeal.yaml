@@ -1,0 +1,366 @@
+# Submit ONE Appeal Request from the persisted Not Eligible Eligibility page.
+# Requires: APPEAL_TEXT; on the Eligibility status page ("Checked on" visible).
+appId: fi.iwa.sakani
+name: Submit one Appeal Request (Not Eligible user)
+env:
+  # Final Submit gate: callers that must not submit pass "false"
+  APPEAL_SUBMIT_APPROVED: '${typeof APPEAL_SUBMIT_APPROVED === "undefined" ? "true" : String(APPEAL_SUBMIT_APPROVED)}'
+---
+# Precondition: persisted result is Not Eligible and an Appeal can be lodged
+- assertVisible:
+    text: "Complete"
+    below: "Status"
+    label: "TEST DATA UNSUITABLE - the Eligibility assessment is not Complete"
+- assertVisible:
+    text: "You.re not eligible for Housing Support"
+    label: "TEST DATA UNSUITABLE - Appeal Request requires a Not Eligible user (the persisted result is not Not Eligible)"
+- copyTextFrom:
+    text: "[0-9]{2}/[0-9]{2}/[0-9]{4}"
+    below: "Checked on"
+- evalScript: ${output.eligibilityCheckedOn = String(maestro.copiedText)}
+- evalScript: "${console.log('APPEAL PRECONDITION - persisted Eligibility: Complete, Not Eligible, checked on ' + output.eligibilityCheckedOn)}"
+- takeScreenshot: appeal-01-not-eligible-result
+# Scroll to the appeal card under "Other options"
+- repeat:
+    times: 6
+    while:
+      notVisible: "(?s)Appeal request.*"
+    commands:
+      - swipe:
+          start: "50%,75%"
+          end: "50%,45%"
+          duration: 800
+      - waitForAnimationToEnd:
+          timeout: 2000
+
+# Stop if an Appeal may already exist (no "lodge an appeal" offer)
+- runFlow:
+    when:
+      notVisible: "(?s)Appeal request.*lodge an appeal.*"
+    commands:
+      - takeScreenshot: appeal-01b-appeal-not-offered
+      - runFlow:
+          when:
+            visible: "#[0-9]{5,}"
+          commands:
+            - copyTextFrom:
+                text: "#[0-9]{5,}"
+            - evalScript: "${console.log('APPEAL PRECHECK - existing appeal reference [' + String(maestro.copiedText) + ']')}"
+      - runFlow:
+          when:
+            visible: "(?si).*appeal.*"
+          commands:
+            - copyTextFrom:
+                text: "(?si).*appeal.*"
+            - evalScript: "${console.log('APPEAL PRECHECK - appeal-related text on the page: [' + String(maestro.copiedText).replace(/\\n/g, ' | ') + ']')}"
+      - assertTrue:
+          condition: ${false}
+          label: "TEST DATA UNSUITABLE - existing Appeal already exists or Appeal request is not offered (see appeal-01b-appeal-not-offered) - nothing created"
+- evalScript: "${console.log('APPEAL PRECHECK - no existing Appeal: the page offers to lodge an appeal')}"
+
+# Open Create Appeal and verify the Appeal screen
+- tapOn:
+    text: "(?s)Appeal request.*lodge an appeal.*"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Step 1 of 3"
+    timeout: 30000
+    label: "APPEAL - the Appeal request screen did not open"
+- assertVisible: "Appeal request"
+- assertVisible: "Terms and Conditions"
+- takeScreenshot: appeal-02-create-appeal
+
+# Step 1 - accept Terms and Conditions
+- waitForAnimationToEnd:
+    timeout: 15000
+- takeScreenshot: appeal-03-step1
+- tapOn:
+    text: "I acknowledge that I have been informed of the housing support list.*"
+    retryTapIfNoChange: false
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    text: "Accept and continue"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Step 2 of 3"
+    timeout: 30000
+    label: "STEP 1 - the declaration was not accepted (Step 2 did not open)"
+
+# Step 2 - every reason -> "Other" + APPEAL_TEXT; stop if "Other" is missing
+- assertVisible: "Reply to Appeal Reasons"
+- evalScript: ${output.appealReasonCount = 0}
+- evalScript: ${output.appealEmptyPasses = 0}
+- repeat:
+    times: 12
+    while:
+      true: ${output.appealEmptyPasses < 2}
+    commands:
+      - runFlow:
+          when:
+            visible: "Enter your reason"
+          commands:
+            - evalScript: ${output.appealEmptyPasses = 0}
+            - evalScript: ${output.appealReasonCount = output.appealReasonCount + 1}
+            - tapOn:
+                text: "Enter your reason"
+                index: 0
+                retryTapIfNoChange: false
+            - extendedWaitUntil:
+                notVisible: "Reply to Appeal Reasons"
+                timeout: 10000
+                label: "STEP 2 - the reason sheet did not open"
+            - takeScreenshot: appeal-04-step2-reason-${output.appealReasonCount}-options
+            - assertVisible:
+                text: "Other"
+                below: "Enter your reason"
+                label: "BUSINESS DECISION REQUIRED - this reason's sheet has no generic 'Other' option (see the options screenshot) - nothing chosen"
+            - tapOn:
+                text: "Other"
+                below: "Enter your reason"
+                retryTapIfNoChange: false
+            - tapOn:
+                text: "Continue"
+                below: "Enter your reason"
+                retryTapIfNoChange: false
+            - extendedWaitUntil:
+                visible: "Reply to Appeal Reasons"
+                timeout: 10000
+                label: "STEP 2 - the reason sheet did not close after Other"
+            # Fill the revealed justification box
+            - repeat:
+                times: 4
+                while:
+                  notVisible: "Write your comment here"
+                commands:
+                  - swipe:
+                      start: "50%,70%"
+                      end: "50%,55%"
+                      duration: 800
+                  - waitForAnimationToEnd:
+                      timeout: 2000
+            - tapOn:
+                text: "Write your comment here"
+                index: 0
+            - inputText: ${APPEAL_TEXT}
+            - waitForAnimationToEnd:
+                timeout: 2000
+            - hideKeyboard
+            - waitForAnimationToEnd:
+                timeout: 3000
+            - assertVisible:
+                text: "Step 2 of 3"
+                label: "STEP 2 - left the Appeal while closing the keyboard"
+            - assertVisible:
+                text: ${APPEAL_TEXT}
+                label: "STEP 2 - the justification text was not kept"
+            - evalScript: "${console.log('STEP 2 - reason ' + output.appealReasonCount + ': Other + justification [' + APPEAL_TEXT + ']')}"
+      - runFlow:
+          when:
+            notVisible: "Enter your reason"
+          commands:
+            - evalScript: ${output.appealEmptyPasses = output.appealEmptyPasses + 1}
+            - swipe:
+                start: "50%,70%"
+                end: "50%,45%"
+                duration: 600
+            - waitForAnimationToEnd:
+                timeout: 2000
+- assertTrue:
+    condition: ${output.appealReasonCount > 0}
+    label: "STEP 2 - no appeal reason was answered"
+- assertNotVisible:
+    text: "Write your comment here"
+    label: "STEP 2 - a mandatory justification is still empty"
+- takeScreenshot: appeal-04-step2
+- tapOn:
+    text: "Continue"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Step 3 of 3"
+    timeout: 30000
+    label: "STEP 2 - the justifications were not accepted (Step 3 did not open)"
+
+# Step 3 - upload the approved synthetic ID and family card files
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertVisible: "Upload your documents"
+- takeScreenshot: appeal-05-step3
+- runFlow:
+    when:
+      notVisible:
+        text: "synthetic-national-id.pdf"
+        below: "A copy of the national ID.*"
+    commands:
+      - tapOn:
+          text: "Upload Document"
+          below: "A copy of the national ID.*"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "Select file from"
+          timeout: 15000
+          label: "STEP 3 - the upload source sheet did not open (national ID)"
+      - tapOn:
+          text: "Files"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "synthetic-national-id.pdf"
+          timeout: 30000
+          label: "STEP 3 - synthetic-national-id.pdf is not offered by the Android file picker - nothing selected"
+      - tapOn:
+          text: "synthetic-national-id.pdf"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "Upload your documents"
+          timeout: 30000
+          label: "STEP 3 - did not return to the Appeal after choosing the national ID file"
+- extendedWaitUntil:
+    visible:
+      text: "synthetic-national-id.pdf"
+      below: "A copy of the national ID.*"
+    timeout: 30000
+    label: "STEP 3 - synthetic-national-id.pdf is not attached to 'A copy of the national ID'"
+- runFlow:
+    when:
+      notVisible:
+        text: "synthetic-family-card.pdf"
+        below: "A copy of the family card.*"
+    commands:
+      - tapOn:
+          text: "Upload Document"
+          below: "A copy of the family card.*"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "Select file from"
+          timeout: 15000
+          label: "STEP 3 - the upload source sheet did not open (family card)"
+      - tapOn:
+          text: "Files"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "synthetic-family-card.pdf"
+          timeout: 30000
+          label: "STEP 3 - synthetic-family-card.pdf is not offered by the Android file picker - nothing selected"
+      - tapOn:
+          text: "synthetic-family-card.pdf"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "Upload your documents"
+          timeout: 30000
+          label: "STEP 3 - did not return to the Appeal after choosing the family card file"
+- extendedWaitUntil:
+    visible:
+      text: "synthetic-family-card.pdf"
+      below: "A copy of the family card.*"
+    timeout: 30000
+    label: "STEP 3 - synthetic-family-card.pdf is not attached to 'A copy of the family card'"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    text: "synthetic-national-id.pdf"
+    below: "A copy of the national ID.*"
+- assertNotVisible:
+    text: "Upload Document"
+    label: "STEP 3 - a mandatory document is still missing"
+- assertNotVisible:
+    text: "(?i).*(invalid|not supported|too large|exceed|failed).*"
+    label: "STEP 3 - PRE rejected an uploaded document (see the screen)"
+- takeScreenshot: appeal-05b-documents-attached
+- evalScript: "${console.log('STEP 3 - attached: A copy of the national ID [synthetic-national-id.pdf], A copy of the family card [synthetic-family-card.pdf]')}"
+# Evidence before submit
+- takeScreenshot: appeal-review-before-submit
+
+# Safe end point: final Submit not approved - stop with Submit visible, nothing submitted
+- runFlow:
+    when:
+      true: ${APPEAL_SUBMIT_APPROVED !== "true"}
+    commands:
+      - assertVisible: "Submit"
+      - takeScreenshot: appeal-safe-end-before-submit
+      - evalScript: "${console.log('APPEAL SAFE END POINT - stopped before Submit (APPEAL_SUBMIT_APPROVED is not true) - nothing submitted')}"
+
+- runFlow:
+    when:
+      true: ${APPEAL_SUBMIT_APPROVED === "true"}
+    commands:
+      # State-changing: Submit exactly once, never retried; unclear state fails the run
+      - evalScript: ${output.appealSubmitTaps = 0}
+      - assertTrue:
+          condition: ${output.appealSubmitTaps === 0}
+          label: "SUBMIT - a submission was already attempted in this run - NOT submitting again"
+      - tapOn:
+          text: "Submit"
+          retryTapIfNoChange: false
+      - evalScript: ${output.appealSubmitTaps = output.appealSubmitTaps + 1}
+      - evalScript: "${console.log('APPEAL SUBMIT - tapped exactly ' + output.appealSubmitTaps + ' time(s)')}"
+      # Verify the submitted confirmation
+      - waitForAnimationToEnd:
+          timeout: 20000
+      - extendedWaitUntil:
+          notVisible: "Upload your documents"
+          timeout: 60000
+          label: "SUBMIT - still on Step 3 after Submit: state UNCERTAIN - do NOT resubmit; verify the Appeal read-only"
+      - assertNotVisible:
+          text: '(?s)(.*There.s something wrong.*|.*the service is down.*|.*try again later.*|Error!)'
+          label: "SUBMIT - the product reported an error after Submit: state UNCERTAIN - do NOT resubmit; verify read-only"
+      - takeScreenshot: appeal-06-after-submit
+      # Dismiss the post-submit service survey (never its Submit)
+      - repeat:
+          times: 3
+          while:
+            visible: "How satisfied are you with our service.*"
+          commands:
+            - tapOn:
+                text: "Dismiss"
+                below: "Help us improve our services"
+                retryTapIfNoChange: false
+            - waitForAnimationToEnd:
+                timeout: 4000
+      - extendedWaitUntil:
+          visible: "Your appeal has been submitted successfully"
+          timeout: 30000
+          label: "SUBMIT - no submission confirmation after Submit: state UNCERTAIN - do NOT resubmit; verify the Appeal read-only"
+      - copyTextFrom:
+          text: "Your appeal has been submitted successfully"
+      - evalScript: ${output.appealResult = String(maestro.copiedText)}
+      - evalScript: ${output.appealResultDetail = ''}
+      - runFlow:
+          when:
+            visible: "(?s)You will be notified.*"
+          commands:
+            - copyTextFrom:
+                text: "(?s)You will be notified.*"
+            - evalScript: ${output.appealResultDetail = String(maestro.copiedText)}
+      - takeScreenshot: appeal-06b-submitted
+      - evalScript: "${console.log('APPEAL AFTER SUBMIT - [' + output.appealResult + '] ' + output.appealResultDetail)}"
+
+      # Verify persisted appeal (reference + status) - read-only
+      - tapOn:
+          text: "Eligibility status"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "#[0-9]{5,}"
+          timeout: 30000
+          label: "PERSISTENCE NOT PROVEN - no appeal reference on the Eligibility status page after Submit - do NOT resubmit"
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertNotVisible:
+          text: "(?s)Appeal request.*lodge an appeal.*"
+          label: "PERSISTENCE NOT PROVEN - the page still offers to lodge an appeal after Submit - do NOT resubmit"
+      - copyTextFrom:
+          text: "#[0-9]{5,}"
+      - evalScript: ${output.appealReference = String(maestro.copiedText).trim()}
+      - copyTextFrom:
+          text: "(?i).*appeal.*"
+          above: "#[0-9]{5,}"
+      - evalScript: ${output.appealStatus = String(maestro.copiedText).trim()}
+      - evalScript: ${output.appealSentOn = ''}
+      - runFlow:
+          when:
+            visible: "(?s)Request sent.*"
+          commands:
+            - copyTextFrom:
+                text: "(?s)Request sent.*"
+            - evalScript: ${output.appealSentOn = String(maestro.copiedText).replace(/\n/g, ' ')}
+      - takeScreenshot: appeal-final-status
+      - evalScript: "${console.log('APPEAL REQUEST END - reference [' + output.appealReference + '] status [' + output.appealStatus + '] result [' + output.appealResult + '] timeline [' + output.appealSentOn + '] - submit taps ' + output.appealSubmitTaps)}"

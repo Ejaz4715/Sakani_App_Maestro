@@ -1,0 +1,165 @@
+# TC-013: a neighbour already greeted by this sender cannot be greeted again
+# Targets the SAME neighbour read from History; Send tapped at most once, never retried
+# State-changing if not enforced: run ONCE per sender, never as 1000011487 (writes-data)
+appId: fi.iwa.sakani
+name: SAKANI-38946-TC-013 Second greeting check
+tags: [sakani-38946, sakani-29885, neighborhood-greetings, service, functional, writes-data, health-check]
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "" : String(NATIONAL_ID)}'
+---
+- assertTrue:
+    condition: ${String(NATIONAL_ID).length === 10 && String(NATIONAL_ID) !== "1000011487"}
+    label: "Sender must be passed with --env NATIONAL_ID and must not be the suite account 1000011487"
+
+# 1. Greeting count before
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+- copyTextFrom: "(?s)[0-9]+ greetings? & [0-9]+ events?"
+- evalScript: ${output.greetingsBefore = parseInt(String(maestro.copiedText), 10)}
+- evalScript: "${console.log('TC-013 sender ' + NATIONAL_ID + ' - Shared moments before = ' + maestro.copiedText)}"
+
+# 2. The neighbour this sender already greeted (History entry, live: "+1\nYou sent a greeting\nTo 3716")
+- runFlow:
+    file: subflows/open-header-screen.yaml
+    env:
+      POINT: "80%,9%"
+      DESTINATION: "History"
+- extendedWaitUntil:
+    visible: "(?s).*You sent a greeting\\s*To [0-9]+.*"
+    timeout: 30000
+    label: "BLOCKED - TEST DATA - no sent greeting in History for ${NATIONAL_ID}"
+- copyTextFrom: "(?s).*You sent a greeting\\s*To [0-9]+.*"
+- evalScript: '${output.previousNeighbour = (String(maestro.copiedText).match(/To\s*([0-9]+)/) || ["", ""])[1]}'
+- assertTrue:
+    condition: ${output.previousNeighbour.length > 0}
+    label: "BLOCKED - TEST DATA - no previously greeted neighbour identifier in History"
+- evalScript: "${console.log('TC-013 previously greeted neighbour = [' + output.previousNeighbour + ']')}"
+- takeScreenshot: sakani-38946-tc-013-01-previously-greeted-neighbour
+- tapOn:
+    point: "10%,8%"
+- extendedWaitUntil:
+    visible: "Shared moments"
+    timeout: 30000
+
+# 3. Compose a new greeting and open the neighbour list
+- runFlow:
+    file: subflows/open-create-chooser.yaml
+- runFlow:
+    file: subflows/compose-greeting.yaml
+- repeat:
+    times: 4
+    while:
+      notVisible: "(?s).*Seventh Neighbor Map.*"
+    commands:
+      - tapOn:
+          text: "Continue"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 8000
+- extendedWaitUntil:
+    visible: "(?s).*Building number: [0-9]+.*"
+    timeout: 30000
+- tapOn: "List view"
+- extendedWaitUntil:
+    visible: "Select neighbor"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "[0-9]+ Neighbors?"
+    timeout: 30000
+- copyTextFrom: "[0-9]+ Neighbors?"
+- evalScript: ${output.neighbourCount = parseInt(String(maestro.copiedText), 10)}
+# The list row for the same neighbour (live row text: "building 3716")
+- scrollUntilVisible:
+    element:
+      text: "building ${output.previousNeighbour}"
+    direction: DOWN
+    timeout: 15000
+    optional: true
+- takeScreenshot: sakani-38946-tc-013-02-neighbour-list
+
+# Path A: the greeted neighbour is not offered - nothing is sent
+- runFlow:
+    when:
+      notVisible: "building ${output.previousNeighbour}"
+    commands:
+      - takeScreenshot: tc-013-previous-neighbour-not-offered
+      - evalScript: "${console.log('TC-013 PASS PATH A - previously greeted neighbour is excluded from selection')}"
+
+# Path B: the greeted neighbour is offered - select exactly it, Send once, expect the specific refusal
+- runFlow:
+    when:
+      visible: "building ${output.previousNeighbour}"
+    commands:
+      # Only neighbour: it arrives pre-selected, so the selection is exactly this neighbour
+      - runFlow:
+          when:
+            true: ${output.neighbourCount === 1}
+          commands:
+            - assertVisible:
+                text: "Unselect all"
+                label: "The only neighbour (the greeted one) is not pre-selected"
+      # Several neighbours: clear the selection, then tick only this neighbour's row circle
+      # (unlabelled circle at the row's right edge; checked state is not exposed)
+      - runFlow:
+          when:
+            true: ${output.neighbourCount > 1}
+          commands:
+            - tapOn:
+                text: "Unselect all"
+                retryTapIfNoChange: false
+            - waitForAnimationToEnd:
+                timeout: 3000
+            - assertNotVisible:
+                text: "Unselect all"
+                label: "Unselect all did not clear the selection - stop before touching another neighbour"
+            - tapOn:
+                text: "building ${output.previousNeighbour}"
+                point: "94%,50%"
+                retryTapIfNoChange: false
+            - waitForAnimationToEnd:
+                timeout: 3000
+      - takeScreenshot: sakani-38946-tc-013-03-same-neighbour-selected
+      - tapOn:
+          text: "Confirm neighbor"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "Review Greetings"
+          timeout: 30000
+      - extendedWaitUntil:
+          visible: "Send greeting card"
+          timeout: 20000
+      - evalScript: "${console.log('TC-013 duplicate attempt to the same neighbour [' + output.previousNeighbour + ']')}"
+      - takeScreenshot: sakani-38946-tc-013-04-review-duplicate-recipient
+      - waitForAnimationToEnd:
+          timeout: 5000
+      # State-changing: exactly ONE tap, never retried
+      - tapOn:
+          text: "Send greeting card"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "(?s).*(You have sent greetings to the same neighbor before|Greeting on its way).*"
+          timeout: 90000
+          optional: true
+      - takeScreenshot: sakani-38946-tc-013-05-duplicate-outcome
+      - assertNotVisible: "(?s).*Greeting on its way.*"
+      - assertVisible:
+          text: "(?s).*You have sent greetings to the same neighbor before, please choose another and try again.*"
+          label: "29885: the duplicate greeting to the same neighbour was not refused with the specific message"
+      - tapOn: "Ok"
+      - evalScript: "${console.log('TC-013 PASS PATH B - same neighbour offered, Send refused')}"
+
+# 4. Both paths: the greeting count did not rise
+- stopApp
+- launchApp
+# Dismiss a late satisfaction survey on Home
+- runFlow:
+    file: subflows/dismiss-late-survey.yaml
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+- copyTextFrom: "(?s)[0-9]+ greetings? & [0-9]+ events?"
+- evalScript: "${console.log('TC-013 Shared moments after = ' + maestro.copiedText)}"
+- assertTrue:
+    condition: ${parseInt(String(maestro.copiedText), 10) === output.greetingsBefore}
+    label: "29885 one greeting per neighbour: the greeting count did not rise after the duplicate attempt"

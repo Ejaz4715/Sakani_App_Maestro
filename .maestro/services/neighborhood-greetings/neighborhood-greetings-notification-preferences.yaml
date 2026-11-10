@@ -1,0 +1,21 @@
+# TC-007: notification preferences open with the Receive Notifications setting
+# Safety: the toggle is never changed (persistent account setting)
+appId: fi.iwa.sakani
+name: SAKANI-38946-TC-007 Notification preferences open with the Receive Notifications setting
+tags: [sakani-38946, neighborhood-greetings, service, functional, health-check]
+---
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+
+# Open preferences (unlabelled header icon)
+- runFlow:
+    file: subflows/open-header-screen.yaml
+    env:
+      POINT: "92%,9%"
+      DESTINATION: "(?s).*Receive Notifications.*"
+
+- assertVisible: "(?s).*Manage how you receive notifications from neighbors.*"
+- assertVisible: "(?s).*Get alerts when neighbors send you greetings or events.*"
+- takeScreenshot: sakani-38946-tc-007-notification-preferences

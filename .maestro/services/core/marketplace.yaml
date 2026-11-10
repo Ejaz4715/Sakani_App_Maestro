@@ -1,0 +1,72 @@
+# MKT-001 / MKT-005 - Explore loads the marketplace with result count
+# Read-only; no session required
+appId: fi.iwa.sakani
+name: MKT-001 Explore loads marketplace (MKT-005 result count)
+tags:
+  - health-check
+---
+- stopApp
+# Restart so the flow starts from the app entry (session kept)
+- launchApp
+
+# Clear launch popups until the tab bar is reachable
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Explore\s*Tab 2 of 4'
+# Open Explore (handles NPS survey)
+- runFlow:
+    file: ../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Explore\s*Tab 2 of 4'
+      DESTINATION: "Registered Interests"
+- extendedWaitUntil:
+    visible:
+      text: 'Explore\s*Tab 2 of 4'
+      selected: true
+    timeout: 30000
+
+# Category gate: choose Buy / Ready Units if sub-tabs are not up yet
+# Linear on purpose: a retry loop oscillates
+- runFlow:
+    when:
+      notVisible: '[Uu]nits\s*Tab 2 of 2'
+    commands:
+      - tapOn: "(Construction Status|Ready Units|Readymade|Offplan|Land)"
+      # Transition proof: one of the two sheets opened
+      - extendedWaitUntil:
+          visible: "(Start searching|Apply)"
+          timeout: 15000
+      - runFlow:
+          when:
+            visible: "Start searching"
+          commands:
+            - tapOn: "Buy"
+            - tapOn: "Ready(made| Units)"
+            - tapOn: "Start searching"
+      - runFlow:
+          when:
+            visible: "Apply"
+          commands:
+            - tapOn: "Ready(made| Units)"
+            - tapOn: "Apply"
+
+# Wait for search results
+- extendedWaitUntil:
+    visible: '[Uu]nits\s*Tab 2 of 2'
+    timeout: 90000
+
+# MKT-005 result count and both sub-tabs
+- extendedWaitUntil:
+    visible: "(?s).*[0-9][0-9,]* Units for [Ss]ale.*"
+    timeout: 60000
+- assertVisible: 'Projects\s*Tab 1 of 2'
+- assertVisible: '[Uu]nits\s*Tab 2 of 2'
+# Chip shows the applied construction status
+- assertVisible: "Ready(made| Units)"
+
+# At least one listing card renders
+- assertVisible:
+    text: "(?s).*[Pp]rice\nSAR\n.*"
+    below:
+      text: '[Uu]nits\s*Tab 2 of 2'

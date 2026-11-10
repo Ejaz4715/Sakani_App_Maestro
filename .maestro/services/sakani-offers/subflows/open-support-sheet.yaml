@@ -1,0 +1,14 @@
+# Helper: open the Support bottom sheet from the voucher list header
+# Support icon is unlabelled, so it is tapped by coordinate
+appId: fi.iwa.sakani
+name: Open the voucher Support bottom sheet
+---
+- assertVisible: "Sakani Voucher"
+- tapOn:
+    point: "93%,9%"
+
+- extendedWaitUntil:
+    visible: "Support"
+    timeout: 30000
+- assertVisible: "(?s)Contact Us.*"
+- assertVisible: "(?s)Join as vendor.*"

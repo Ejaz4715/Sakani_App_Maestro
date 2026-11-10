@@ -1,0 +1,127 @@
+# E2E: Home -> Neighborhood Greetings -> compose -> choose neighbour -> Review sheet
+# Safety: sends nothing; never taps Start Connecting, Save as image or Send greeting card
+appId: fi.iwa.sakani
+name: SAKANI-38946-E2E-001 Neighborhood Greetings end-to-end to the review sheet (sends nothing)
+tags:
+  - sakani-38946
+  - sakani-29885
+  - neighborhood-greetings
+  - e2e
+  - service
+  - release-readiness
+---
+# Start on authenticated Home
+- stopApp
+- launchApp
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- assertVisible: 'Home\s*Tab 1 of 4'
+- takeScreenshot: sakani-38946-e2e-001-01-start-authenticated-home
+
+# Open Neighborhood Greetings
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+
+# Verify Shared-moments summary
+- assertVisible: "Shared moments"
+- assertVisible: "(?s)[0-9]+ greetings? & [0-9]+ events?"
+- takeScreenshot: sakani-38946-e2e-001-02-service-main-screen
+
+# Open the create chooser (workaround: a coach-mark may swallow the first tap)
+- repeat:
+    times: 4
+    while:
+      notVisible: "Create Greetings"
+    commands:
+      - tapOn:
+          point: "89%,93%"
+      - waitForAnimationToEnd:
+          timeout: 5000
+
+- assertVisible: "Create Greetings"
+- assertVisible: "Create Event"
+- takeScreenshot: sakani-38946-e2e-001-03-create-chooser
+
+# Compose a greeting; "test tag 1" is a disabled placeholder and is never tapped
+- tapOn: "Create Greetings"
+- extendedWaitUntil:
+    visible: "test tag 1"
+    timeout: 45000
+- takeScreenshot: sakani-38946-e2e-001-04-tag-selection
+
+# Pick a live tag by position; workaround: re-tap while the tap is swallowed
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    times: 3
+    while:
+      visible: "test tag 1"
+      notVisible: "Continue"
+    commands:
+      - tapOn:
+          point: "82%,21%"
+      - waitForAnimationToEnd:
+          timeout: 5000
+- extendedWaitUntil:
+    visible: "Continue"
+    timeout: 45000
+
+- assertVisible: "Change message"
+- assertVisible: "Save as image"
+- takeScreenshot: sakani-38946-e2e-001-05-composed-greeting
+
+# Continue to the neighbour map (a coach-mark may swallow the first tap)
+- repeat:
+    times: 4
+    while:
+      notVisible: "(?s).*Seventh Neighbor Map.*"
+    commands:
+      # Optional: Continue may be absent while the map loads; arrival is proven below
+      - tapOn:
+          text: "Continue"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 8000
+
+# Verify the neighbour map
+- assertVisible: "(?s).*Seventh Neighbor Map.*"
+- extendedWaitUntil:
+    visible: "(?s).*Building number: [0-9]+.*"
+    timeout: 30000
+- assertVisible: "(?s).*Zip code: [0-9]+.*"
+- assertNotVisible: "Start Connecting"
+- takeScreenshot: sakani-38946-e2e-001-06-neighbour-map
+
+# Select the recipient via List view
+- tapOn: "List view"
+- extendedWaitUntil:
+    visible: "Select neighbor"
+    timeout: 30000
+
+- assertVisible: "(?s).*[0-9]+ Neighbors.*"
+- assertVisible: "(?s).*building [0-9]+.*"
+# Neighbour is pre-selected by default; no selection tap needed
+- assertVisible: "Unselect all"
+- takeScreenshot: sakani-38946-e2e-001-07-select-neighbour
+
+- tapOn: "Confirm neighbor"
+
+# Review Greetings sheet
+- extendedWaitUntil:
+    visible: "Review Greetings"
+    timeout: 30000
+
+- extendedWaitUntil:
+    visible: "(?s).*Show my name.*"
+    timeout: 20000
+- assertVisible: "(?s).*Show my phone number.*"
+# Gift voucher is never selected (would consume real stock)
+- assertVisible: "(?s).*Add an optional surprise.*"
+
+# Final action is available but NOT executed
+- assertVisible: "Send greeting card"
+- takeScreenshot: sakani-38946-e2e-001-08-END-POINT-review-PRE-SEND
+
+# Stop point: never tap Send greeting card (irreversible, notifies real residents)

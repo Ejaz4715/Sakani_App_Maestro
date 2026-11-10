@@ -1,0 +1,72 @@
+# SAKANI-23459-E2E-001: Home -> catalogue -> issued VAT certificate (same as profile).
+# Safety: only for accounts that already hold a certificate; never taps Download/Inquiry.
+appId: fi.iwa.sakani
+name: SAKANI-23459-E2E-001 Real estate tax end-to-end - catalogue to issued VAT certificate
+tags:
+  - sakani-23459
+  - real-estate-tax
+  - e2e
+  - service
+  - release-readiness
+---
+# Cold start at Home (session is reused)
+- stopApp
+- launchApp
+
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- assertVisible: 'Home\s*Tab 1 of 4'
+- takeScreenshot: sakani-23459-e2e-001-01-start-authenticated-home
+
+# Safety guard: certificate must already be issued before "Request a service" is tapped
+# Read from Home (VAT page has no tab bar); also captures the profile-route number
+- runFlow:
+    file: subflows/open-ret-profile.yaml
+- assertVisible: "Certificate Issued successfully"
+- copyTextFrom: "[0-9]{10,}"
+- evalScript: ${output.certViaProfile = String(maestro.copiedText)}
+- evalScript: "${console.log('E2E-001 certificate via the PROFILE route = ' + output.certViaProfile)}"
+- takeScreenshot: sakani-23459-e2e-001-02-precondition-certificate-exists
+
+# Leave the exemption page by its own back arrow
+- runFlow:
+    file: subflows/leave-ret-profile.yaml
+
+# Open the VAT service from the catalogue
+- runFlow:
+    file: subflows/open-vat-service.yaml
+- assertVisible: "Request a service"
+
+# Request the service (routes to the existing certificate; may raise a real VAT request)
+- tapOn: "Request a service"
+
+# Verify the eligibility validation does not block this user
+- assertNotVisible: "Missing some information"
+
+# Verify the issued certificate via the service route
+- extendedWaitUntil:
+    visible: "First Home VAT Exemption"
+    timeout: 45000
+- assertVisible: "Certificate Issued successfully"
+- assertVisible: "(?s).*Your VAT certificate has been issued and is ready to download.*"
+- assertVisible: "Certificate number"
+# Certificate number matched as a pattern, never a literal
+- assertVisible: "[0-9]{10,}"
+
+# Stop point: Download is asserted, never tapped
+- assertVisible: "Download"
+- takeScreenshot: sakani-23459-e2e-001-03-END-POINT-certificate-via-service-route
+
+# Capture the service-route number
+- copyTextFrom: "[0-9]{10,}"
+- evalScript: ${output.certViaService = String(maestro.copiedText)}
+- evalScript: "${console.log('E2E-001 certificate via the SERVICE route = ' + output.certViaService)}"
+
+# Verify both routes lead to the same certificate
+- assertTrue: ${output.certViaService === output.certViaProfile}
+
+# End: nothing requested, downloaded or committed
+- assertVisible: "Download"
+- takeScreenshot: sakani-23459-e2e-001-04-convergence-confirmed

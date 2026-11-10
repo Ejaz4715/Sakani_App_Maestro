@@ -1,0 +1,33 @@
+# Type one FA amount and verify it within its own row; retries because typing drops keys.
+# Env: BELOW, ABOVE (bracketing labels), VALUE (digits), EXPECTED (read-back text).
+appId: fi.iwa.sakani
+name: Set one amount field and verify it
+---
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: ${EXPECTED}
+        below: ${BELOW}
+        above: ${ABOVE}
+    commands:
+      # Centre the field so the sticky footer cannot intercept the tap
+      - scrollUntilVisible:
+          element:
+            text: ${BELOW}
+          direction: DOWN
+          centerElement: true
+          timeout: 20000
+      - tapOn:
+          below: ${BELOW}
+          above: ${ABOVE}
+      - eraseText
+      - inputText: ${VALUE}
+      - runFlow:
+          file: ../../../subflows/dismiss-keypad.yaml
+
+# Verify the field shows EXPECTED
+- assertVisible:
+    text: ${EXPECTED}
+    below: ${BELOW}
+    above: ${ABOVE}

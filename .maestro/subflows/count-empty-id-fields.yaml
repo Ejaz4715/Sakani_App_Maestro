@@ -1,0 +1,13 @@
+# Count empty person-ID inputs ("Enter ID number") into output.idEmptyNow.
+appId: fi.iwa.sakani
+name: Count empty person-ID fields
+---
+- evalScript: ${output.idEmptyNow = 0}
+- repeat:
+    times: 8
+    while:
+      visible:
+        text: "Enter ID number"
+        index: ${output.idEmptyNow}
+    commands:
+      - evalScript: ${output.idEmptyNow = output.idEmptyNow + 1}

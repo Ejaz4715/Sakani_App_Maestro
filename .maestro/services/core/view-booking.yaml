@@ -1,0 +1,80 @@
+# View Booking - READ-ONLY: My Bookings Active, Completed and Cancelled tabs open and render
+# Any valid account; cards or empty state are both valid; no booking card is opened
+appId: fi.iwa.sakani
+name: View Booking - Active, Completed and Cancelled
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('VIEW BOOKING TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+
+# Login with test account after a cleared launch
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# Open Account (handles NPS)
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- assertNotVisible: "Log in"
+
+- tapOn: "My bookings"
+# Transition proof: My Bookings status tabs
+- extendedWaitUntil:
+    visible: 'Active\s*Tab 2 of 4'
+    timeout: 30000
+- assertVisible: "My Bookings"
+- assertVisible: 'All\s*Tab 1 of 4'
+- assertVisible: 'Active\s*Tab 2 of 4'
+- assertVisible: 'Completed\s*Tab 3 of 4'
+- assertVisible: 'Cancelled\s*Tab 4 of 4'
+
+# Active: Active cards or empty state
+- tapOn: 'Active\s*Tab 2 of 4'
+- extendedWaitUntil:
+    visible:
+      text: 'Active\s*Tab 2 of 4'
+      selected: true
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "(?s)(.*\nActive\n.*|.*You don.t have any active booking.*)"
+    timeout: 30000
+- assertNotVisible: "(?s).*\nCompleted\n.*"
+- assertNotVisible: "(?s).*\nCancelled\n.*"
+- takeScreenshot: view-booking-active
+
+# Completed: Completed cards or empty state
+- tapOn: 'Completed\s*Tab 3 of 4'
+- extendedWaitUntil:
+    visible:
+      text: 'Completed\s*Tab 3 of 4'
+      selected: true
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "(?s)(.*\nCompleted\n.*|.*You don.t have any completed booking.*)"
+    timeout: 30000
+- assertNotVisible: "(?s).*\nActive\n.*"
+- assertNotVisible: "(?s).*\nCancelled\n.*"
+- takeScreenshot: view-booking-completed
+
+# Cancelled: Cancelled cards or empty state (empty wording not yet seen live; same pattern as the other tabs)
+- tapOn: 'Cancelled\s*Tab 4 of 4'
+- extendedWaitUntil:
+    visible:
+      text: 'Cancelled\s*Tab 4 of 4'
+      selected: true
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "(?s)(.*\nCancelled\n.*|.*You don.t have any cancel+ed booking.*)"
+    timeout: 30000
+- assertNotVisible: "(?s).*\nActive\n.*"
+- assertNotVisible: "(?s).*\nCompleted\n.*"
+- takeScreenshot: view-booking-cancelled

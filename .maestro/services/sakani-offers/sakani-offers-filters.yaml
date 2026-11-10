@@ -1,0 +1,137 @@
+# TC-005: filter controls open with their options and narrow the voucher list (read-only)
+# Sheets are closed by their Scrim, never by back (back pops the whole screen)
+appId: fi.iwa.sakani
+name: SAKANI-31966-TC-005 Voucher filtration controls open and filter the list
+tags:
+  - sakani-31966
+  - sakani-offers
+  - service
+  - functional
+  - health-check
+---
+# Cold start (keeps the session)
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-voucher-list.yaml
+
+# Verify sort sheet (newest/oldest)
+- runFlow:
+    file: subflows/open-filter-sheet.yaml
+    env:
+      CHIP: "Sort by"
+- assertVisible:
+    text: "Newest to Oldest"
+    below: "Scrim"
+- assertVisible:
+    text: "Oldest to Newest"
+    below: "Scrim"
+- takeScreenshot: sakani-31966-tc-005-sort-by
+- tapOn: "Scrim"
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 20000
+- assertVisible: "Sakani Voucher"
+
+# Verify coupon category sheet
+- runFlow:
+    file: subflows/open-filter-sheet.yaml
+    env:
+      CHIP: "Coupon Category"
+# Sheet says "Home Service" while cards say "Home Services"; exact match is intended
+- assertVisible:
+    text: "Home Service"
+    below: "Scrim"
+- assertVisible:
+    text: "Shopping"
+    below: "Scrim"
+- assertVisible:
+    text: "All"
+    below: "Scrim"
+- assertVisible:
+    text: "Submit"
+    below: "Scrim"
+- takeScreenshot: sakani-31966-tc-005-coupon-category
+- tapOn: "Scrim"
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 20000
+- assertVisible: "Sakani Voucher"
+
+# Verify coupon type sheet
+- runFlow:
+    file: subflows/open-filter-sheet.yaml
+    env:
+      CHIP: "Coupon Type"
+- assertVisible:
+    text: "All"
+    below: "Scrim"
+- assertVisible:
+    text: "Online"
+    below: "Scrim"
+- assertVisible:
+    text: "Store"
+    below: "Scrim"
+- takeScreenshot: sakani-31966-tc-005-coupon-type
+- tapOn: "Scrim"
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 20000
+
+# Verify the list survives all three sheets
+- assertVisible: "Sort by"
+- assertVisible: "Coupon Category"
+- assertVisible: "Coupon Type"
+
+# Filter by category Home Service
+# Precondition: list holds a Home Services card and a card of another category
+- assertVisible: "(?s).*Home Services.*% off.*"
+- assertVisible: "(?s)(?!.*Home Services).*% off.*"
+- runFlow:
+    file: subflows/open-filter-sheet.yaml
+    env:
+      CHIP: "Coupon Category"
+- tapOn:
+    text: "Home Service"
+    below: "Scrim"
+- tapOn:
+    text: "Submit"
+    below: "Scrim"
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Verify only Home Services cards remain
+- assertVisible: "Home Service"
+- assertVisible: "(?s).*Home Services.*% off.*"
+- assertNotVisible: "(?s)(?!.*Home Services).*% off.*"
+- takeScreenshot: sakani-31966-tc-005-filtered-home-service
+
+# Filter by coupon type Store (cold start clears the previous filter)
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-voucher-list.yaml
+# Precondition: list holds an In store card and one that is not
+- assertVisible: "(?s).*% off.*In store.*"
+- assertVisible: "(?s)(?!.*In store).*% off.*"
+- runFlow:
+    file: subflows/open-filter-sheet.yaml
+    env:
+      CHIP: "Coupon Type"
+- tapOn:
+    text: "Store"
+    below: "Scrim"
+- tapOn:
+    text: "Submit"
+    below: "Scrim"
+- extendedWaitUntil:
+    notVisible: "Scrim"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Store"
+- assertVisible: "(?s).*% off.*In store.*"
+- assertNotVisible: "(?s)(?!.*In store).*% off.*"
+- takeScreenshot: sakani-31966-tc-005-filtered-store

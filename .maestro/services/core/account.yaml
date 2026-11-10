@@ -1,0 +1,500 @@
+# Account services journey - read-only
+# No profile edits, submissions, payments or setting changes
+appId: fi.iwa.sakani
+name: Account services - read-only profile, wallet, preferences, eligibility, bookings and settings
+tags:
+  - health-check
+env:
+  # Test account (identity verified in Profile before services open)
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1012204739" : String(NATIONAL_ID)}'
+---
+# STAGE 1 - Login and authenticated Account
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('ACCOUNT.YAML TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+
+# Login with test account
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# Open Account via shared helper (handles NPS, retries tap)
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+
+# Verify authenticated Account
+- extendedWaitUntil:
+    visible: "My bookings"
+    timeout: 60000
+- assertNotVisible: "Log in"
+
+
+# Reusable return proof for Account
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+# STAGE 2 - Profile details (read-only)
+- tapOn: "Profile details"
+- extendedWaitUntil:
+    visible: "Personal Detail(s)?"
+    timeout: 30000
+- assertVisible: "Profile"
+- assertVisible: "National ID"
+- assertVisible: ${NATIONAL_ID}
+- assertVisible: "Name"
+- assertVisible: "Date of Birth"
+- assertVisible: '(Sex|Gender)\s*'
+- assertVisible: "Status"
+- assertVisible: "Contact Details"
+- assertVisible: "Phone Number"
+- assertVisible: "Email"
+- assertVisible:
+    text: '[^\s@]+@[^\s@]+\.[^\s@]+'
+    below: "Email"
+- scrollUntilVisible:
+    element:
+      text: "Current Region"
+    direction: DOWN
+    timeout: 20000
+- assertVisible: "Housing Details"
+- assertVisible: "Current Housing Type"
+- assertVisible: "Current Region"
+- assertVisible: "Current City"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 3 - Wallet (scroll Account list back to top first)
+- scrollUntilVisible:
+    element:
+      text: "Profile details"
+    direction: UP
+    timeout: 20000
+- evalScript: ${output.accountService = "(?s)Wallet\\s.*"}
+# Bounded navigation to a fully visible Account service row
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Transaction history"
+    timeout: 30000
+- assertVisible: "Wallet"
+- assertVisible: "Available Balance"
+- assertVisible: "Reserved Balance"
+- assertVisible: "Total Balance"
+- assertVisible: "SAR"
+- assertVisible:
+    text: '[0-9][0-9,.]*'
+    below: "Available Balance"
+    above: "Reserved Balance"
+# Toolbar Back (no label, coordinate tap); native Back leaves Wallet open
+- tapOn:
+    point: "76,204"
+    retryTapIfNoChange: false
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 4 - Preferences and both child services
+- evalScript: ${output.accountService = "Preferences"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: '(?s)Registered interest\sView megaprojects.*'
+    timeout: 30000
+- assertVisible: "Preferences"
+- assertVisible: '(?s)Preference form\sReview form.*'
+
+- tapOn: '(?s)Registered interest\sView megaprojects.*'
+- extendedWaitUntil:
+    visible: "Your register interest list is empty"
+    timeout: 30000
+- assertVisible: "Registered interest"
+- assertVisible: "Mega projects"
+- assertVisible: "Projects"
+- assertVisible: "Brokers"
+# Toolbar Back returns to Preferences; Android Back skips it
+- tapOn:
+    point: "76,204"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: '(?s)Registered interest\sView megaprojects.*'
+    timeout: 30000
+- assertVisible: "Preferences"
+- assertVisible: '(?s)Preference form\sReview form.*'
+- tapOn: '(?s)Preference form\sReview form.*'
+- extendedWaitUntil:
+    visible: "Register interest in projects"
+    timeout: 30000
+- assertVisible: "Preference form"
+- assertVisible: "step 1 of 2"
+- assertVisible: "Region"
+- assertVisible: "City"
+- assertVisible: "Neighborhood"
+- assertVisible: "Completion status"
+- assertVisible: "Property type"
+# Never select a field or tap Next/submit
+- tapOn:
+    point: "76,204"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: '(?s)Registered interest\sView megaprojects.*'
+    timeout: 30000
+- assertVisible: "Preferences"
+- assertVisible: '(?s)Preference form\sReview form.*'
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 5 - Financial advisory: recommendation asserted, never started
+- evalScript: ${output.accountService = "Financial advisory"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Get recommendation"
+    timeout: 30000
+- assertVisible: "Financial advisory"
+- assertVisible: "(?s)Beneficiaries\\s.*"
+- assertVisible: "(?s)Service Channels\\s.*"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 6 - Eligibility intro only; never tap the eligibility CTA
+- evalScript: ${output.accountService = "(?s)Eligibility checker status.*"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Start Eligibility checker"
+    timeout: 30000
+- assertVisible: "Eligibility"
+- assertVisible: "(?s).*Access to Exclusive Housing Programs.*"
+- assertVisible: "(?s).*Faster Booking with Support.*"
+- assertVisible: "(?s).*Relevant Results Only.*"
+- assertNotVisible: "Status"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 7 - My Bookings: all tabs and loaded booking information
+- evalScript: ${output.accountService = "My bookings"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Active\\s*Tab 2 of 4"
+    timeout: 30000
+- assertVisible: "All\\s*Tab 1 of 4"
+- assertVisible: "Completed\\s*Tab 3 of 4"
+- assertVisible: "Cancelled\\s*Tab 4 of 4"
+- assertVisible: "Unpaid"
+- assertVisible: "Ready to sign"
+- extendedWaitUntil:
+    visible: "(?s).*Unit Type\\s.*Unit code\\s.*Booking date\\s.*"
+    timeout: 30000
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 8 - Remaining Account services; no business CTAs opened
+# Ejar contracts
+- evalScript: ${output.accountService = "Ejar contracts"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "All \\([0-9]+\\)\\s*Tab 1 of 3"
+    timeout: 30000
+- assertVisible: "Rental Contracts"
+- assertVisible: "Pending \\([0-9]+\\)\\s*Tab 2 of 3"
+- assertVisible: "Completed \\([0-9]+\\)\\s*Tab 3 of 3"
+- extendedWaitUntil:
+    visible: "(?s).*Contract number\\s.*Lessor name\\s.*Tenant name\\s.*Start date\\s.*End date\\s.*"
+    timeout: 30000
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# Real estate tax - no issuance or download
+- evalScript: ${output.accountService = "Real estate tax"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Certificate Issued successfully"
+    timeout: 30000
+- assertVisible: "First Home VAT Exemption"
+- assertVisible: "Status"
+- assertVisible: "Checked on"
+- assertVisible: "Certificate number"
+- assertVisible: "Your VAT certificate has been issued and is ready to download."
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# Rental Behavior Inquiry - paid report request never executed
+- evalScript: ${output.accountService = "Rental Behavior Inquiry"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+# Old and new page wording accepted; CTA never tapped
+- extendedWaitUntil:
+    visible: "Request (your Rental Score|Rental Behavior) Report"
+    timeout: 30000
+- assertVisible: "(Rental Score Inquiry|Rental Behavior Inquiry)"
+- assertVisible: "(?s)Beneficiaries\\s.*"
+- assertVisible: "(?s)Expected time\\s.*"
+- assertVisible: "(?s)Service fee\\s.*"
+- assertVisible: "(?s)Service available on\\s.*"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# Purchased deals - empty state
+- evalScript: ${output.accountService = "Purchased deals"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "(Sorry, )?[Tt]here are no purchased deals"
+    timeout: 30000
+- assertVisible: "Purchased deals"
+- assertVisible: "Check latest deal from deals marketplace"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# Units delivery - empty state and tabs
+- evalScript: ${output.accountService = "Units delivery"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "You don't have any all units delivery form yet"
+    timeout: 30000
+- assertVisible: "Units Delivery"
+- assertVisible: "All\\s*Tab 1 of 5"
+- assertVisible: "Pending\\s*Tab 2 of 5"
+- assertVisible: "Approved\\s*Tab 3 of 5"
+- assertVisible: "Accepted by developer\\s*Tab 4 of 5"
+# Tab 5 starts off-screen: scroll the tab row only (no tab is selected)
+- swipe:
+    start: "85%,16%"
+    end: "15%,16%"
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "Rejected\\s*Tab 5 of 5"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# Invoices - list only, nothing opened or paid
+- evalScript: ${output.accountService = "Invoices"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Unpaid\\s*Tab 2 of 4"
+    timeout: 30000
+- assertVisible: "Invoices"
+- assertVisible: "All\\s*Tab 1 of 4"
+- assertVisible: "Paid\\s*Tab 3 of 4"
+- assertVisible: "Cancelled\\s*Tab 4 of 4"
+- extendedWaitUntil:
+    visible: "(?s).*Order type\\s.*Invoice expires\\s.*Amount\\s.*"
+    timeout: 30000
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# STAGE 9 - Settings: inspect without choosing or saving
+- evalScript: ${output.accountService = "(?s)Language\\s.*"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Select [Ll]anguage( preference)?"
+    timeout: 30000
+- assertVisible: "English"
+- assertVisible: "Confirm"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+- evalScript: ${output.accountService = "Accessibility"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "(?s)Text size\\s.*"
+    timeout: 30000
+- assertVisible: "Accessibility"
+- assertVisible: "(?s)Text Reader\\s.*"
+- assertVisible: "(?s)Color blindness\\s.*"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+- evalScript: ${output.accountService = "App appearance\\s*"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Appearance"
+    timeout: 30000
+- assertVisible: "Dark mode"
+- assertVisible: "Light mode"
+- assertVisible: "(?s)System default\\s.*"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+- evalScript: ${output.accountService = "Regulations and policies"}
+- runFlow:
+    file: ../../subflows/open-account-service.yaml
+- extendedWaitUntil:
+    visible: "Eligibility policy"
+    timeout: 30000
+- assertVisible: "Regulations and policies"
+# Combined Privacy Policy & Terms entry
+- assertVisible: "Privacy Policy & Terms & Conditions"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+# Authentication actions discovered but not executed
+- assertVisible: "Log out"
+
+# STAGE 10 - Top Account services
+- repeat:
+    times: 6
+    while:
+      notVisible:
+        text: "Profile details"
+        width: 996
+        height: 147
+        tolerance: 4
+        below:
+          text: '(?s)Hello\s.*'
+        above:
+          text: 'Home\s*Tab 1 of 4'
+    commands:
+      - swipe:
+          start: "50%,40%"
+          end: "50%,80%"
+          duration: 500
+      - waitForAnimationToEnd:
+          timeout: 2000
+- assertVisible:
+    text: "Profile details"
+    width: 996
+    height: 147
+    tolerance: 4
+    below:
+      text: '(?s)Hello\s.*'
+    above:
+      text: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+- assertVisible: "Enable Touch ID"
+- tapOn: "Notifications"
+- extendedWaitUntil:
+    visible: "(There is no notification|There are no notifications)"
+    timeout: 30000
+- assertVisible: "Notifications? Center"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+# Favorites - read-only; never tap a heart, card, Compare or Explore marketplace
+# Chips expose no selected state: each tap is proven by a settled Favorites page with a valid result state
+- tapOn: "Favorites"
+- extendedWaitUntil:
+    visible: "Land"
+    timeout: 30000
+- assertVisible: "Favorites"
+- assertVisible: "Compare"
+- assertVisible: "All"
+- assertVisible: "Mega projects"
+- assertVisible: "Projects"
+
+# Mega projects
+- tapOn: "Mega projects"
+- waitForAnimationToEnd:
+    timeout: 5000
+# Mega projects tap completed: still on Favorites, categories present, list settled (empty or saved items)
+- assertVisible: "Favorites"
+- assertVisible: "Compare"
+- extendedWaitUntil:
+    visible: "Land"
+    timeout: 15000
+    label: "FAVORITES - the page did not settle after tapping Mega projects"
+- runFlow:
+    when:
+      visible: "Your favorites list is empty"
+    commands:
+      - assertVisible: "Explore marketplace to find what suit your needs"
+      - assertVisible: "Explore marketplace"
+# Saved items: only absence of the empty state is asserted
+- runFlow:
+    when:
+      notVisible: "Your favorites list is empty"
+    commands:
+      - assertNotVisible: "Explore marketplace to find what suit your needs"
+      - takeScreenshot: favorites-mega-projects-items
+
+# Projects
+- tapOn: "Projects"
+- waitForAnimationToEnd:
+    timeout: 5000
+# Projects tap completed: still on Favorites, categories present, list settled (empty or saved items)
+- assertVisible: "Favorites"
+- assertVisible: "Compare"
+- extendedWaitUntil:
+    visible: "Land"
+    timeout: 15000
+    label: "FAVORITES - the page did not settle after tapping Projects"
+- runFlow:
+    when:
+      visible: "Your favorites list is empty"
+    commands:
+      - assertVisible: "Explore marketplace to find what suit your needs"
+      - assertVisible: "Explore marketplace"
+- runFlow:
+    when:
+      notVisible: "Your favorites list is empty"
+    commands:
+      - assertNotVisible: "Explore marketplace to find what suit your needs"
+      - takeScreenshot: favorites-projects-items
+
+# Land
+- tapOn: "Land"
+- waitForAnimationToEnd:
+    timeout: 5000
+# Land tap completed: still on Favorites, categories present, list settled (empty or saved items)
+- assertVisible: "Favorites"
+- assertVisible: "Compare"
+- extendedWaitUntil:
+    visible: "Land"
+    timeout: 15000
+    label: "FAVORITES - the page did not settle after tapping Land"
+- runFlow:
+    when:
+      visible: "Your favorites list is empty"
+    commands:
+      - assertVisible: "Explore marketplace to find what suit your needs"
+      - assertVisible: "Explore marketplace"
+- runFlow:
+    when:
+      notVisible: "Your favorites list is empty"
+    commands:
+      - assertNotVisible: "Explore marketplace to find what suit your needs"
+      - takeScreenshot: favorites-land-items
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+- tapOn: "Help"
+- extendedWaitUntil:
+    visible: "Help (&|and) Support"
+    timeout: 30000
+- assertVisible: "Read frequently asked questions"
+- assertVisible: "(?s)Contact Us\\s.*"
+- assertVisible: "(?s)Phone call\\s.*"
+- assertVisible: "(?s)Send us an email\\s.*"
+- assertVisible: "(?s)Send us a message on Whatsapp\\s.*"
+- assertVisible: "(?s)Send us a message on X\\s.*"
+- assertVisible: "(?s)Live sign language support\\s.*"
+- back
+- runFlow:
+    file: ../../subflows/account-ready.yaml
+
+- takeScreenshot: account-services-complete

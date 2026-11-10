@@ -1,0 +1,633 @@
+# Check eligibility for the registered user (called by e2e/check-eligibility.yaml).
+# Sets output.eligibilityOutcome: not-eligible | eligible | unknown (unknown stops).
+appId: fi.iwa.sakani
+name: Eligibility - form, family, deeds and the real result for the registered user
+---
+# Open Account -> Eligibility Checker
+- runFlow:
+    file: open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- evalScript: "${console.log('ELIGIBILITY - Account opened')}"
+- evalScript: ${output.accountService = "(?s)Eligibility checker status.*"}
+- runFlow:
+    file: open-account-service.yaml
+# Eligibility Checker opened
+- extendedWaitUntil:
+    visible: "Start Eligibility checker"
+    timeout: 30000
+- assertVisible: "Eligibility"
+- assertVisible: "Access to Exclusive Housing Programs"
+- takeScreenshot: elig-1-eligibility-checker
+- tapOn: "Start Eligibility checker"
+
+# Eligibility - Step 1 of 3
+- extendedWaitUntil:
+    visible: "Step 1 of 3"
+    timeout: 30000
+- assertVisible: "(1\\. )?Terms and Conditions"
+- takeScreenshot: elig-2-step1-terms
+
+# Step 1 - Terms and Conditions (current wording first, older wording as alternative)
+# Workaround: wait for spinner to clear before ticking (early tap is ignored)
+- waitForAnimationToEnd:
+    timeout: 15000
+- tapOn: "(I confirm reading, understanding and agreeing to the terms and conditions.*|I have read and understood the terms and conditions of the contract.*)"
+- tapOn:
+    text: "(Agree on the terms and conditions|Accept and continue)"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Step 2 of 3"
+    timeout: 30000
+    label: "STEP 1 - Terms were not accepted (Step 2 did not open)"
+
+# Step 2 - answer every Yes/No question "No"; verified by selected-radio image
+- assertVisible: "(2\\. )?Acknowledgement"
+- assertVisible: "1\\. Have you or any of your dependents resided outside.*"
+- assertVisible: "2\\. Do you or your family have financial assets.*"
+- assertVisible: "3\\. Did you or any of your dependents own a house title.*"
+
+# Q1 - resided outside KSA > 365 days -> No
+- tapOn:
+    width: 63
+    height: 63
+    tolerance: 3
+    below: "1\\. Have you or any of your dependents resided outside.*"
+    above: "2\\. Do you or your family have financial assets.*"
+    index: 1
+    retryTapIfNoChange: false
+# Settle before comparing with the reference image
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertScreenshot:
+    path: ../reference-screenshots/eligibility/radio-selected.png
+    cropOn:
+      width: 63
+      height: 63
+      tolerance: 3
+      below: "1\\. Have you or any of your dependents resided outside.*"
+      above: "2\\. Do you or your family have financial assets.*"
+      index: 1
+    thresholdPercentage: 95
+    label: "STEP 2 - Q1 (resided outside KSA) is not answered No"
+
+# Q2 - financial assets above five million SAR -> No
+- tapOn:
+    width: 63
+    height: 63
+    tolerance: 3
+    below: "2\\. Do you or your family have financial assets.*"
+    above: "3\\. Did you or any of your dependents own a house title.*"
+    index: 1
+    retryTapIfNoChange: false
+# Settle before comparing with the reference image
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertScreenshot:
+    path: ../reference-screenshots/eligibility/radio-selected.png
+    cropOn:
+      width: 63
+      height: 63
+      tolerance: 3
+      below: "2\\. Do you or your family have financial assets.*"
+      above: "3\\. Did you or any of your dependents own a house title.*"
+      index: 1
+    thresholdPercentage: 95
+    label: "STEP 2 - Q2 (financial assets) is not answered No"
+
+# Q3 - owned a house title within the past year -> No
+- tapOn:
+    width: 63
+    height: 63
+    tolerance: 3
+    below: "3\\. Did you or any of your dependents own a house title.*"
+    above: "Continue( to confirm acknowledge)?"
+    index: 1
+    retryTapIfNoChange: false
+# Settle before comparing with the reference image
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertScreenshot:
+    path: ../reference-screenshots/eligibility/radio-selected.png
+    cropOn:
+      width: 63
+      height: 63
+      tolerance: 3
+      below: "3\\. Did you or any of your dependents own a house title.*"
+      above: "Continue( to confirm acknowledge)?"
+      index: 1
+    thresholdPercentage: 95
+    label: "STEP 2 - Q3 (house title) is not answered No"
+- evalScript: "${console.log('STEP 2 - all three mandatory Yes/No questions answered No (pixel-proven)')}"
+- takeScreenshot: elig-3-step2-all-no
+- tapOn:
+    text: "Continue( to confirm acknowledge)?"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Step 3 of 3"
+    timeout: 30000
+    label: "STEP 2 - answers were not accepted (Step 3 did not open)"
+
+# Step 3 - Family and Preferences information
+- assertVisible: "(3\\. Family information|Family and Preferences information)"
+
+# Current Region -> first option
+- tapOn:
+    text: "Select region"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 15000
+- copyTextFrom:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+- evalScript: ${output.currentRegion = String(maestro.copiedText)}
+- tapOn:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+# Current City -> first option
+- tapOn:
+    text: "Select city"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 15000
+- copyTextFrom:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+- evalScript: ${output.currentCity = String(maestro.copiedText)}
+- tapOn:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+# Preferred Region -> first option
+- tapOn:
+    text: "Select region"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 15000
+- copyTextFrom:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+- evalScript: ${output.preferredRegion = String(maestro.copiedText)}
+- tapOn:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+# Preferred City -> first option
+- tapOn:
+    text: "Select city"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 15000
+- copyTextFrom:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+- evalScript: ${output.preferredCity = String(maestro.copiedText)}
+- tapOn:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+# Preferred District -> first option that is not "UNKNOWN"
+- scrollUntilVisible:
+    element:
+      text: "Select District"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Select District"
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 15000
+- copyTextFrom:
+    below: "Search"
+    width: 1080
+    height: 147
+    tolerance: 4
+    index: 0
+- evalScript: ${output.firstDistrictIsPlaceholder = String(maestro.copiedText).trim().toUpperCase() === 'UNKNOWN'}
+- runFlow:
+    when:
+      true: ${output.firstDistrictIsPlaceholder !== true}
+    commands:
+      - evalScript: ${output.preferredDistrict = String(maestro.copiedText)}
+      - tapOn:
+          below: "Search"
+          width: 1080
+          height: 147
+          tolerance: 4
+          index: 0
+- runFlow:
+    when:
+      true: ${output.firstDistrictIsPlaceholder === true}
+    commands:
+      - copyTextFrom:
+          below: "Search"
+          width: 1080
+          height: 147
+          tolerance: 4
+          index: 1
+      - evalScript: ${output.preferredDistrict = String(maestro.copiedText)}
+      - tapOn:
+          below: "Search"
+          width: 1080
+          height: 147
+          tolerance: 4
+          index: 1
+- evalScript: "${console.log('STEP 3 - current [' + output.currentRegion + ' / ' + output.currentCity + '] preferred [' + output.preferredRegion + ' / ' + output.preferredCity + ' / ' + output.preferredDistrict + ']')}"
+
+# Current housing status -> Rented house
+- scrollUntilVisible:
+    element:
+      text: "Select an option"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Select an option"
+- extendedWaitUntil:
+    visible: "Rented house"
+    timeout: 15000
+- tapOn: "Rented house"
+- extendedWaitUntil:
+    visible:
+      text: "Rented house"
+      below: "Current housing status.*"
+    timeout: 15000
+    label: "STEP 3 - Current housing status is not Rented house"
+- evalScript: "${console.log('STEP 3 - Current housing status = Rented house')}"
+
+# Verify no ownership status is shown
+- assertNotVisible:
+    text: "(?i)(Owned house|Owned|Property owner)"
+    below: "Current housing status.*"
+    label: "STEP 3 - Current housing status shows an ownership value - must be Rented house"
+
+# Family information
+# Divorce fields - only when the profile is divorced
+- runFlow:
+    when:
+      visible: "Divorce date.*"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Enter the number of the divorce deed"
+          direction: DOWN
+          timeout: 15000
+      - tapOn: "Hijri"
+      - extendedWaitUntil:
+          visible: "[0-9]{4} AH"
+          timeout: 10000
+      - tapOn: "[A-Za-z]{3},1 .*"
+      - tapOn: "OK"
+      - extendedWaitUntil:
+          visible:
+            text: "[0-9]{2}-[0-9]{2}-[0-9]{4}"
+            below: "Divorce date.*"
+          timeout: 10000
+          label: "STEP 3 - divorce date was not set by the Hijri picker"
+      - copyTextFrom:
+          text: "[0-9]{2}-[0-9]{2}-[0-9]{4}"
+          below: "Divorce date.*"
+      - evalScript: ${output.divorceDate = String(maestro.copiedText)}
+      - tapOn: "Enter the number of the divorce deed"
+      - inputText: ${output.generatedNationalId}
+      - hideKeyboard
+      - assertVisible:
+          text: ${output.generatedNationalId}
+          below: "Divorce number.*"
+      - evalScript: "${console.log('STEP 3 - divorce fields filled: date [' + output.divorceDate + '] deed number [' + output.generatedNationalId + ']')}"
+
+# Fill every empty person DOB once (picker year - 31, day 1); stop if count does not drop
+- evalScript: ${output.familyDobs = ''}
+- evalScript: ${output.familyDobCount = 0}
+- evalScript: ${output.dobEmptyPasses = 0}
+- runFlow:
+    when:
+      notVisible: "Family Information"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Family Information"
+          direction: UP
+          timeout: 15000
+          optional: true
+- runFlow:
+    when:
+      notVisible: "Family Information"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Family Information"
+          direction: DOWN
+          timeout: 15000
+          label: "FAMILY DOB - the Family Information section was not found above or below"
+# Reuse previous AFTER count while the screen is unchanged
+- evalScript: ${output.dobCountFresh = false}
+- repeat:
+    times: 12
+    while:
+      true: ${output.dobEmptyPasses < 2}
+    commands:
+      - evalScript: ${output.dobProcessedThisPass = false}
+      - runFlow:
+          when:
+            visible: "Enter DOB"
+          commands:
+            - evalScript: ${output.dobEmptyPasses = 0}
+            # BEFORE: count empty DOB fields
+            - runFlow:
+                when:
+                  true: ${output.dobCountFresh !== true}
+                commands:
+                  - runFlow:
+                      file: count-empty-dob-fields.yaml
+            - evalScript: ${output.dobEmptyBefore = output.dobEmptyNow}
+            - evalScript: ${output.familyDobCount = output.familyDobCount + 1}
+            # Open this field's Hijri picker
+            - tapOn:
+                text: "Hijri"
+                below:
+                  text: "Enter DOB"
+                  index: 0
+                rightOf:
+                  text: "Enter DOB"
+                  index: 0
+                retryTapIfNoChange: false
+            - extendedWaitUntil:
+                visible: "[0-9]{4} AH"
+                timeout: 10000
+                label: "FAMILY DOB - the Hijri date picker did not open"
+            - copyTextFrom:
+                text: "[0-9]{4} AH"
+            - evalScript: ${output.pickerYear = Number(String(maestro.copiedText).replace(/[^0-9]/g, ''))}
+            - evalScript: ${output.dobTargetYear = String(output.pickerYear - 31)}
+            - assertTrue:
+                condition: ${output.pickerYear > 1400 && Number(output.dobTargetYear) === output.pickerYear - 31}
+                label: "FAMILY DOB - could not read the Hijri picker's current year"
+            # Year grid: select the target year
+            - tapOn: "[0-9]{4} AH"
+            - extendedWaitUntil:
+                visible: ${String(output.pickerYear)}
+                timeout: 10000
+                label: "FAMILY DOB - the year grid did not open"
+            - scrollUntilVisible:
+                element:
+                  text: ${output.dobTargetYear}
+                direction: DOWN
+                timeout: 30000
+                label: "FAMILY DOB - the target year was not found in the year grid"
+            - tapOn: ${output.dobTargetYear}
+            # Day 1, then OK
+            - extendedWaitUntil:
+                visible: "${output.dobTargetYear} AH"
+                timeout: 10000
+                label: "FAMILY DOB - the picker did not move to the adult year"
+            - tapOn: "[A-Za-z]{3},1 .*"
+            - tapOn: "OK"
+            - extendedWaitUntil:
+                notVisible: "[0-9]{4} AH"
+                timeout: 10000
+                label: "FAMILY DOB - the date picker did not close"
+            # Verify a date in the target year is shown ...
+            - extendedWaitUntil:
+                visible: "[0-9]{2}-[0-9]{2}-${output.dobTargetYear}"
+                timeout: 10000
+                label: "FAMILY DOB - no date in the adult year is displayed after OK"
+            - waitForAnimationToEnd:
+                timeout: 3000
+            # ... and exactly one empty DOB field was filled
+            - runFlow:
+                file: count-empty-dob-fields.yaml
+            - assertTrue:
+                condition: ${output.dobEmptyNow === output.dobEmptyBefore - 1}
+                label: "FAMILY DOB - the field still shows 'Enter DOB' after OK (date not committed, or a filled field was re-opened) - STOPPED, no other date tried"
+            - assertNotVisible:
+                text: "(?i).*(invalid|not valid|incorrect).*"
+                label: "FAMILY DOB - PRE rejected the date of birth (not retried; see the screen)"
+            - copyTextFrom:
+                text: "[0-9]{2}-[0-9]{2}-${output.dobTargetYear}"
+            - evalScript: ${output['generatedAdditionalDob' + output.familyDobCount] = String(maestro.copiedText)}
+            - evalScript: ${output.familyDobs = output.familyDobs + 'generatedAdditionalDob' + output.familyDobCount + '=' + String(maestro.copiedText) + ' '}
+            - takeScreenshot: elig-dob-${output.familyDobCount}
+            - evalScript: "${console.log('FAMILY TEST DATA - additional DOB ' + output.familyDobCount + ' [' + String(maestro.copiedText) + '] (output.generatedAdditionalDob' + output.familyDobCount + '; Hijri, picker year ' + output.pickerYear + ' minus 31); empty DOB fields ' + output.dobEmptyBefore + ' -> ' + output.dobEmptyNow)}"
+            # Field proven; AFTER count becomes next BEFORE
+            - evalScript: ${output.dobCountFresh = true}
+            - evalScript: ${output.dobProcessedThisPass = true}
+      # Scroll only when no empty DOB field was found
+      - runFlow:
+          when:
+            true: ${output.dobProcessedThisPass !== true}
+          commands:
+            - evalScript: ${output.dobEmptyPasses = output.dobEmptyPasses + 1}
+            - swipe:
+                start: "50%,70%"
+                end: "50%,40%"
+                duration: 600
+            - waitForAnimationToEnd:
+                timeout: 3000
+            - evalScript: ${output.dobCountFresh = false}
+- evalScript: "${console.log('STEP 3 - person DOB fields filled: ' + output.familyDobCount + (output.familyDobs ? ' [' + output.familyDobs.trim() + ']' : ''))}"
+
+# Fills empty family-member ID inputs with GENERATED synthetic IDs (PRE test data, approved 25/10/2026; logged masked)
+# Never regenerated: a PRE rejection stops the run.
+- evalScript: ${output.usedIds = ',' + output.generatedNationalId + ','}
+- evalScript: ${output.generatedAdditionalIds = ''}
+- evalScript: ${output.additionalIdCount = 0}
+- evalScript: ${output.idEmptyPasses = 0}
+- runFlow:
+    when:
+      notVisible: "Family Information"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Family Information"
+          direction: UP
+          timeout: 15000
+          optional: true
+- runFlow:
+    when:
+      notVisible: "Family Information"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Family Information"
+          direction: DOWN
+          timeout: 15000
+          label: "ADDITIONAL ID - the Family Information section was not found above or below"
+# Reuse previous AFTER count while the screen is unchanged
+- evalScript: ${output.idCountFresh = false}
+- repeat:
+    times: 12
+    while:
+      true: ${output.idEmptyPasses < 2}
+    commands:
+      - evalScript: ${output.idProcessedThisPass = false}
+      - runFlow:
+          when:
+            visible: "Enter ID number"
+          commands:
+            - evalScript: ${output.idEmptyPasses = 0}
+            # BEFORE: count empty ID inputs
+            - runFlow:
+                when:
+                  true: ${output.idCountFresh !== true}
+                commands:
+                  - runFlow:
+                      file: count-empty-id-fields.yaml
+            - evalScript: ${output.idEmptyBefore = output.idEmptyNow}
+            # Generate once; validate format and uniqueness before typing
+            - evalScript: ${output.newId = String(Math.floor(1000000000 + Math.random() * 1000000000))}
+            - assertTrue:
+                # Keep dollar-free or Maestro skips evaluation
+                condition: ${output.newId.length === 10 && output.newId.charAt(0) === '1' && !/[^0-9]/.test(output.newId) && output.usedIds.indexOf(',' + output.newId + ',') < 0}
+                label: "TEST DATA - generated additional ID does not match 1 + 9 digits or was already used in this run"
+            - evalScript: ${output.additionalIdCount = output.additionalIdCount + 1}
+            - evalScript: ${output.idVar = 'generatedAdditionalId' + output.additionalIdCount}
+            - evalScript: ${output[output.idVar] = output.newId}
+            - evalScript: ${output.usedIds = output.usedIds + output.newId + ','}
+            # Enter the ID into the first empty ID input
+            - tapOn:
+                text: "Enter ID number"
+                index: 0
+                retryTapIfNoChange: false
+            - inputText: ${output.newId}
+            - hideKeyboard
+            - waitForAnimationToEnd:
+                timeout: 3000
+            # Verify the field shows this ID ...
+            - assertVisible:
+                text: ${output.newId}
+                label: "ADDITIONAL ID - the field did not take the generated ID (not retried)"
+            # ... PRE did not reject it ...
+            - assertNotVisible:
+                text: "(?i).*(invalid|not valid|incorrect|already (used|exists|registered)).*"
+                label: "ADDITIONAL ID - PRE rejected the generated ID (not retried; see the screen for the exact message)"
+            # ... and the field left the empty set
+            - runFlow:
+                file: count-empty-id-fields.yaml
+            - assertTrue:
+                condition: ${output.idEmptyNow === output.idEmptyBefore - 1}
+                label: "ADDITIONAL ID - the empty-ID count did not drop after the fill; a filled field may still look empty - STOPPED before any second input"
+            - takeScreenshot: elig-id-${output.additionalIdCount}
+            - evalScript: ${output.generatedAdditionalIds = output.generatedAdditionalIds + output.idVar + '=' + output.newId + ' '}
+            - evalScript: "${console.log('ELIGIBILITY TEST DATA - additional ID ' + output.additionalIdCount + ' [******' + output.newId.slice(-4) + '] (output.' + output.idVar + ') - 1 + 9 digits, unique in this run; empty ID fields ' + output.idEmptyBefore + ' -> ' + output.idEmptyNow)}"
+            # Field proven; AFTER count becomes next BEFORE
+            - evalScript: ${output.idCountFresh = true}
+            - evalScript: ${output.idProcessedThisPass = true}
+      # Scroll only when no empty ID field was found
+      - runFlow:
+          when:
+            true: ${output.idProcessedThisPass !== true}
+          commands:
+            - evalScript: ${output.idEmptyPasses = output.idEmptyPasses + 1}
+            - swipe:
+                start: "50%,70%"
+                end: "50%,40%"
+                duration: 600
+            - waitForAnimationToEnd:
+                timeout: 3000
+            - evalScript: ${output.idCountFresh = false}
+- evalScript: "${console.log('STEP 3 - additional person-ID fields filled: ' + output.additionalIdCount + (output.generatedAdditionalIds ? ' [' + output.generatedAdditionalIds.trim().replace(/[0-9]{6}([0-9]{4})/g, function (m, d) { return '******' + d; }) + ']' : ''))}"
+- takeScreenshot: elig-4-step3-filled
+
+# State-changing: Confirm once
+- scrollUntilVisible:
+    element:
+      text: "Confirm"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "Confirm"
+    retryTapIfNoChange: false
+# No completion inferred here; evaluated only at the result gate
+- waitForAnimationToEnd:
+    timeout: 15000
+- assertNotVisible:
+    text: '(?s)(.*There.s something wrong.*|.*the service is down.*|Error!)'
+    label: "SUBMIT - the product reported an error after Confirm"
+- takeScreenshot: elig-5-after-family-confirm
+
+# Deed information (only when shown)
+- runFlow:
+    file: eligibility-fill-deeds.yaml
+
+# Result gate: result body present and no form page, before and after settle
+- takeScreenshot: elig-7-destination
+- extendedWaitUntil:
+    visible: '(?si).*\beligible for\b.*'
+    timeout: 60000
+    label: "RESULT - no eligibility result message on screen (another required page, or no result) - NOT a PASS"
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertNotVisible:
+    text: "Step [0-9] of 3"
+    label: "RESULT - still on an eligibility form step - another required page, NOT a result"
+- assertNotVisible:
+    text: "(3\\. )?Deed information"
+    label: "RESULT - still on Deed information - NOT a result"
+- assertNotVisible:
+    text: "Start Eligibility checker"
+    label: "RESULT - back on the Eligibility introduction - NOT a result"
+- assertVisible:
+    text: '(?si).*\beligible for\b.*'
+    label: "RESULT - the result message did not stay on screen"
+- copyTextFrom:
+    text: '(?si).*\beligible for\b.*'
+- evalScript: ${output.eligibilityResult = String(maestro.copiedText)}
+- takeScreenshot: elig-8-final-result
+- evalScript: "${console.log('ELIGIBILITY END - new user [' + output.generatedNationalId + '] result [' + output.eligibilityResult.replace(/\\n/g, ' | ') + ']')}"
+
+# Report previous ineligibility reasons (not asserted)
+- evalScript: ${output.reasonOwnsDeed = 'absent'}
+- evalScript: ${output.reasonUnder24 = 'absent'}
+- evalScript: ${output.reasonHusband = 'absent'}
+- runFlow:
+    when:
+      visible: "(?si).*own a housing deed.*"
+    commands:
+      - evalScript: ${output.reasonOwnsDeed = 'PRESENT'}
+- runFlow:
+    when:
+      visible: "(?si).*under 24.*"
+    commands:
+      - evalScript: ${output.reasonUnder24 = 'PRESENT'}
+- runFlow:
+    when:
+      visible: "(?si).*husband has already submitted an application.*"
+    commands:
+      - evalScript: ${output.reasonHusband = 'PRESENT'}
+- evalScript: "${console.log('PREVIOUS REASONS - owns a housing deed [' + output.reasonOwnsDeed + '] under 24 [' + output.reasonUnder24 + '] husband already applied [' + output.reasonHusband + ']')}"
+
+# Eligibility outcome from explicit evidence only; unknown stops the run
+- evalScript: ${output.eligibilityOutcome = 'unknown'}
+- runFlow:
+    when:
+      visible: '(?si).*\bnot eligible for\b.*'
+    commands:
+      - evalScript: ${output.eligibilityOutcome = 'not-eligible'}
+- takeScreenshot: elig-9-outcome
+- evalScript: "${console.log('ELIGIBILITY OUTCOME [' + output.eligibilityOutcome + '] for [' + output.generatedNationalId + '] - result text [' + output.eligibilityResult.replace(/\\n/g, ' | ') + ']')}"
+- assertTrue:
+    condition: ${output.eligibilityOutcome !== 'unknown'}
+    label: "UNKNOWN ELIGIBILITY RESULT - the result screen shows neither a known negative nor a proven positive message (see elig-8-final-result / elig-9-outcome) - NOT a PASS"

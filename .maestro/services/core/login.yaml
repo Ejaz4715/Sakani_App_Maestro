@@ -1,0 +1,77 @@
+# Login regression: AUTH-002, 006, 010
+# Safe: signs in only, changes no account data
+appId: fi.iwa.sakani
+name: Login - AUTH-002 input validation, AUTH-006 sign-in via Nafath, AUTH-010 authenticated Home
+tags:
+  - health-check
+env:
+  # Test account: -e NATIONAL_ID overrides; else a fresh synthetic ID per run ("1" + 9 random digits)
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1" + String(Math.floor(Math.random() * 1000000000)).padStart(9, "0") : String(NATIONAL_ID)}'
+---
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('LOGIN.YAML TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+
+# Guest Home via shared first-run handling
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "(?s).*Login / Sign up.*"
+- tapOn: "(?s).*Login / Sign up.*"
+
+# Known login copy issue: "Nefath" spelling
+- extendedWaitUntil:
+    visible: "Continue with N[ae]fath"
+    timeout: 30000
+- assertVisible: "Enter your ID, phone number,? or email"
+
+# AUTH-002: Continue must not proceed on empty or short input
+- tapOn: "Continue"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Login with nafath"
+
+- tapOn: "Enter your ID, phone number,? or email"
+- inputText: "123"
+- tapOn: "Continue"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Login with nafath"
+
+- tapOn: "123"
+- eraseText
+
+# Re-focus the ID field
+- tapOn: "Enter your ID, phone number,? or email"
+
+# AUTH-006: sign in with NATIONAL_ID
+- inputText: ${NATIONAL_ID}
+- assertVisible: ${NATIONAL_ID}
+- tapOn: "Continue"
+# Transition proof: Nafath screen reached
+- extendedWaitUntil:
+    visible: "Login with nafath"
+    timeout: 30000
+- assertVisible: "Confirm"
+# Nafath screen must show exactly the requested ID before Confirm
+- assertVisible: ${NATIONAL_ID}
+
+- tapOn: "Confirm"
+
+# Shared post-login handling (prompts, promos, biometrics declined if shown)
+- runFlow:
+    file: ../../subflows/post-login.yaml
+
+# AUTH-010: authenticated Home with named greeting (NPS handled by shared helper)
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+- assertVisible:
+    text: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+    above:
+      text: 'Home\s*Tab 1 of 4'
+      selected: true
+- assertNotVisible: "(?s).*Login / Sign up.*"

@@ -1,0 +1,47 @@
+# Helper (SAKANI-51392): from Booking Details, open the cancellation and select CANCEL_REASON, ending
+# with "Confirm cancellation" ready. NEVER taps Confirm cancellation (the committing step).
+# A booking-fee "Yes, cancel my booking" dialog is a confirmation: the helper stops before it.
+# Requires: CANCEL_REASON. Starts on Booking Details with "Cancel booking" visible.
+appId: fi.iwa.sakani
+name: Open the cancellation reason screen (stops before Confirm cancellation)
+---
+- tapOn:
+    text: "^Cancel booking$"
+    enabled: true
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "(?s)(.*booking fee is not refunded.*|Reason for cancelling|.*[Ff]inancial [Aa]pplication.*)"
+    timeout: 45000
+# Early block (if the product blocks before the reason screen): evidence only, nothing else tapped
+- runFlow:
+    when:
+      visible: "(?s).*[Ff]inancial [Aa]pplication.*"
+    commands:
+      - takeScreenshot: sakani-51392-block-before-reason
+      - evalScript: "${console.log('SAKANI-51392 - Financial Application message shown right after Cancel booking (before the reason screen)')}"
+      - assertNotVisible:
+          text: "(?s).*[Ff]inancial [Aa]pplication.*"
+          label: "OBSERVED - cancellation blocked before the reason screen (record the live wording; the ticket flow expects it after Confirm cancellation)"
+- assertNotVisible:
+    text: "(?s).*booking fee is not refunded.*"
+    label: "STOP - booking-fee cancellation confirmation shown; not answered (needs explicit approval)"
+- assertVisible: "Reason for cancelling"
+- assertVisible: "Please let us know the reason for cancelling your booking"
+- takeScreenshot: sakani-51392-reason-screen
+- scrollUntilVisible:
+    element:
+      text: ${CANCEL_REASON}
+    direction: DOWN
+    timeout: 20000
+    label: "TEST DATA - cancellation reason ${CANCEL_REASON} is not offered"
+- tapOn: ${CANCEL_REASON}
+- waitForAnimationToEnd:
+    timeout: 6000
+# The button's node reports enabled even while greyed out, so pixels prove it (cancel-booking reference)
+- assertScreenshot:
+    path: ../../../reference-screenshots/cancel/confirm-cancellation-enabled.png
+    cropOn:
+      text: "Confirm cancellation"
+    thresholdPercentage: 95
+    label: "CANCEL - Confirm cancellation did not become enabled for reason ${CANCEL_REASON}"
+- takeScreenshot: sakani-51392-confirm-cancellation-ready

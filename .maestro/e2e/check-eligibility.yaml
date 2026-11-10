@@ -1,0 +1,36 @@
+# Check Eligibility E2E: register a new user, check eligibility, verify Eligible / Not Eligible, stop.
+# Writes data: one account, one eligibility check. No Appeal (covered by appeal-request.yaml).
+appId: fi.iwa.sakani
+name: Check Eligibility Journey
+tags:
+  - e2e
+  - eligibility
+  - critical
+  - release-readiness
+env:
+  REGISTRATION_OTP: '${typeof REGISTRATION_OTP === "undefined" ? "1234" : String(REGISTRATION_OTP)}'
+---
+# State-changing: register one adult new user (runs only in minute window 25-55)
+- runFlow:
+    file: ../subflows/register-adult-new-user.yaml
+    env:
+      REGISTRATION_OTP: ${REGISTRATION_OTP}
+
+# Check eligibility (unknown result stops the run)
+- runFlow:
+    file: ../subflows/eligibility-check.yaml
+
+# Result branch: Eligible ends here
+- runFlow:
+    when:
+      true: ${output.eligibilityOutcome === 'eligible'}
+    commands:
+      - takeScreenshot: journey-final-eligible
+      - evalScript: "${console.log('JOURNEY END - ELIGIBLE - user [' + output.generatedNationalId + '] result [' + output.eligibilityResult.replace(/\\n/g, ' | ') + '] - no Appeal')}"
+# Not Eligible ends here too (Eligibility only - Appeal is covered by appeal-request.yaml)
+- runFlow:
+    when:
+      true: ${output.eligibilityOutcome === 'not-eligible'}
+    commands:
+      - takeScreenshot: journey-final-not-eligible
+      - evalScript: "${console.log('JOURNEY END - NOT ELIGIBLE - user [' + output.generatedNationalId + '] result [' + output.eligibilityResult.replace(/\\n/g, ' | ') + '] - no Appeal opened')}"

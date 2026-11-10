@@ -1,0 +1,19 @@
+# Helper: open an unlabelled header icon. Env: POINT (icon), DESTINATION (screen text)
+# Workaround: a first-run tip may swallow the first tap, so re-tap until DESTINATION shows
+appId: fi.iwa.sakani
+name: Open a Seventh Neighbor header screen
+---
+- repeat:
+    times: 3
+    while:
+      notVisible: ${DESTINATION}
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          point: ${POINT}
+      - extendedWaitUntil:
+          visible: ${DESTINATION}
+          timeout: 15000
+          optional: true
+- assertVisible: ${DESTINATION}

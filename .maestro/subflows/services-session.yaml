@@ -1,0 +1,14 @@
+# Sign the device in as the services suite account (setup step, not a test).
+# Usage: maestro test [-e NATIONAL_ID=<id>] .maestro/subflows/services-session.yaml
+appId: fi.iwa.sakani
+name: Services session - sign in as the service-suite account
+env:
+  # Self-referencing default: a literal would override -e NATIONAL_ID on Maestro 2.9.0
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+# Login with the suite account
+- runFlow:
+    file: login.yaml

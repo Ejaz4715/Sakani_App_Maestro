@@ -1,0 +1,8 @@
+node_modules/
+test-results/
+report-dashboard/test-reports-history/
+report-dashboard/maestro-output/
+report-dashboard/dashboard.html
+.maestro/screenshots/
+.env/
+.claude*/

@@ -1,0 +1,53 @@
+# Helper: open a Home voucher by HOME_VOUCHER_TITLE (order changes between launches)
+# Reads card category/discount first; tap retried until details page opens
+appId: fi.iwa.sakani
+name: Open a Home voucher by its title
+---
+- scrollUntilVisible:
+    element:
+      text: "Vouchers"
+    direction: DOWN
+    timeout: 40000
+- scrollUntilVisible:
+    element:
+      text: ${"(?s).*% off.*" + HOME_VOUCHER_TITLE + ".*"}
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+# Card must be in the Home Vouchers section
+- assertVisible:
+    text: ${"(?s).*% off.*" + HOME_VOUCHER_TITLE + ".*"}
+    below: "Vouchers"
+- copyTextFrom:
+    text: ${"(?s).*% off.*" + HOME_VOUCHER_TITLE + ".*"}
+    below: "Vouchers"
+- evalScript: '${output.cardLines = String(maestro.copiedText).split(String.fromCharCode(10)).map(function (s) { return s.trim(); })}'
+# Workaround: no second dollar sign in this expression (Maestro skips it silently)
+- evalScript: '${output.cardDiscountIndex = output.cardLines.findIndex(function (s) { return s.indexOf("% off") >= 0; })}'
+- assertTrue:
+    condition: ${output.cardDiscountIndex > 0}
+    label: "HOME VOUCHER - the Home card shows no discount line"
+- evalScript: ${output.cardDiscount = output.cardLines[output.cardDiscountIndex]}
+- evalScript: ${output.cardCategory = output.cardLines[output.cardDiscountIndex - 1]}
+- evalScript: "${console.log('HOME VOUCHER CARD - title [' + HOME_VOUCHER_TITLE + '] category [' + output.cardCategory + '] discount [' + output.cardDiscount + ']')}"
+- takeScreenshot: home-voucher-card
+- repeat:
+    times: 3
+    while:
+      notVisible: "(?s).*customers viewed this voucher.*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: ${"(?s).*% off.*" + HOME_VOUCHER_TITLE + ".*"}
+          below: "Vouchers"
+          optional: true
+      - extendedWaitUntil:
+          visible: "(?s).*customers viewed this voucher.*"
+          timeout: 20000
+          optional: true
+- assertVisible: "(?s).*customers viewed this voucher.*"
+# Details header is the voucher title
+- assertVisible:
+    text: ${HOME_VOUCHER_TITLE}
+    above: "(?s).*customers viewed this voucher.*"

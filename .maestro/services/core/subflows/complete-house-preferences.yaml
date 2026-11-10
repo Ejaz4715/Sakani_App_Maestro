@@ -1,0 +1,149 @@
+# Helper: House preferences - fills Region and City only when empty; existing chip selections are never changed
+# Chip state is not in the hierarchy: Step 1/2 incomplete (Next/Save disabled) -> BLOCKED before any change or save
+# State-changing: Save tapped once, only when both steps are already valid; never retried
+appId: fi.iwa.sakani
+name: House preferences - fill empty Region/City, keep chips, Save once when both steps are valid
+---
+- tapOn: "(?s)House preferences.*"
+- extendedWaitUntil:
+    visible: "Step 1 of 2"
+    timeout: 30000
+- assertVisible: "Register interest in projects"
+- takeScreenshot: house-preferences-1-step1-before
+
+# Region (only when empty); tap + type repeated until the suggestion appears
+- runFlow:
+    when:
+      visible: "Search any region..."
+    commands:
+      - repeat:
+          times: 3
+          while:
+            notVisible:
+              text: ${PREF_REGION}
+              index: 1
+          commands:
+            - runFlow:
+                when:
+                  visible: "Search any region..."
+                commands:
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+                  - tapOn: "Search any region..."
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+                  - inputText: ${PREF_REGION_SEARCH}
+            # Suggestion is the second node with this text
+            - extendedWaitUntil:
+                visible:
+                  text: ${PREF_REGION}
+                  index: 1
+                timeout: 10000
+                optional: true
+      - assertVisible:
+          text: ${PREF_REGION}
+          index: 1
+      - tapOn:
+          text: ${PREF_REGION}
+          index: 1
+      - runFlow:
+          file: ../../../subflows/dismiss-keypad.yaml
+      - waitForAnimationToEnd:
+          timeout: 3000
+
+# City (only when empty)
+- runFlow:
+    when:
+      visible: "Search any city..."
+    commands:
+      - repeat:
+          times: 3
+          while:
+            notVisible: ${PREF_CITY}
+          commands:
+            - runFlow:
+                when:
+                  visible: "Search any city..."
+                commands:
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+                  - tapOn: "Search any city..."
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+                  - inputText: ${PREF_CITY_SEARCH}
+            - extendedWaitUntil:
+                visible: ${PREF_CITY}
+                timeout: 10000
+                optional: true
+      - assertVisible: ${PREF_CITY}
+      - tapOn: ${PREF_CITY}
+      - runFlow:
+          file: ../../../subflows/dismiss-keypad.yaml
+      - waitForAnimationToEnd:
+          timeout: 3000
+
+# Completion status and Property type: kept when Next is already enabled (enabled Next is its own node below Property type)
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      notVisible:
+        text: "Next"
+        below: "Property type"
+    commands:
+      - takeScreenshot: house-preferences-BLOCKED-step1-chips-unknown
+      - assertTrue:
+          condition: ${false}
+          label: "BLOCKED - TEST DATA - Step 1 Completion status / Property type not all set; the app does not expose which chip is selected, so nothing is tapped (no overwrite) and nothing is saved"
+- evalScript: "${console.log('HOUSE PREFERENCES - Step 1 chips already set (Next enabled); kept unchanged')}"
+# Next enabled only when Step 1 required inputs are set
+- extendedWaitUntil:
+    visible:
+      text: "Next"
+      below: "Property type"
+    timeout: 10000
+- takeScreenshot: house-preferences-2-step1-filled
+- tapOn:
+    text: "Next"
+    below: "Property type"
+- extendedWaitUntil:
+    visible: "Step 2 of 2"
+    timeout: 20000
+
+# Step 2: Bedroom and Bathroom kept when Save is already enabled (enabled Save is its own node below Bathroom)
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      notVisible:
+        text: "Save"
+        below: "Bathroom"
+    commands:
+      - takeScreenshot: house-preferences-BLOCKED-step2-chips-unknown
+      - assertTrue:
+          condition: ${false}
+          label: "BLOCKED - TEST DATA - Step 2 Bedroom / Bathroom not all set; the app does not expose which chip is selected, so nothing is tapped (no overwrite) and nothing is saved"
+- evalScript: "${console.log('HOUSE PREFERENCES - Step 2 chips already set (Save enabled); kept unchanged')}"
+- extendedWaitUntil:
+    visible:
+      text: "Save"
+      below: "Bathroom"
+    timeout: 10000
+- takeScreenshot: house-preferences-3-step2-filled
+
+# State-changing: Save - exactly one tap
+- tapOn:
+    text: "Save"
+    below: "Bathroom"
+- extendedWaitUntil:
+    notVisible: "Step 2 of 2"
+    timeout: 45000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: house-preferences-4-after-save
+# Verify registered-interest confirmation
+- extendedWaitUntil:
+    visible: "You have registered interest!"
+    timeout: 20000
+- assertVisible: "(?s).*based on your preference form.*"
+- evalScript: "${console.log('HOUSE PREFERENCES - Save tapped once; the Preference form closed')}"

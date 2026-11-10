@@ -1,0 +1,109 @@
+# Baiti: Jahez purchase consent sheet - Continue gated on both consents, resets on reopen
+# Safety: Continue is NEVER tapped (would open a Jahez account / share personal data)
+appId: fi.iwa.sakani
+name: Baiti opens the Jahez consent sheet; Continue gated on both consents (never tapped)
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+# Profile first name from the Home greeting (proves the prefilled Full name later; no hardcoded name)
+- copyTextFrom:
+    text: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+- evalScript: '${output.greetingName = String(maestro.copiedText).replace(/^[^,]*,\s*/, "").trim().split(/\s+/)[0]}'
+- assertTrue:
+    condition: ${output.greetingName.length > 0}
+    label: "BAITI - the Home greeting shows no name to compare with the prefilled Full name"
+- evalScript: '${output.greetingNameRx = "(?s)(?:.*\\s)?" + output.greetingName.replace(/[.*+?^()|\[\]\\{}]/g, function (c) { return "\\" + c; }) + "(?:\\s.*)?"}'
+
+# Home entry
+- scrollUntilVisible:
+    element:
+      text: "(?s)Baiti.*Everything your home needs.*Discover"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- takeScreenshot: baiti-home-card
+- repeat:
+    times: 3
+    while:
+      notVisible: "Complete your purchase"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "(?s)Baiti.*Everything your home needs.*Discover"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Complete your purchase"
+          timeout: 20000
+          optional: true
+
+# Consent sheet
+- assertVisible: "Complete your purchase"
+- assertVisible: "(?s).*We need your full name and phone number to complete your purchase.*"
+- assertVisible: "Full name"
+- assertVisible: "Mobile number"
+# Pre-filled from profile: the Full name value contains the profile first name shown in the Home greeting
+- assertVisible:
+    text: ${output.greetingNameRx}
+    below: "Full name"
+    above: "Mobile number"
+    label: "BAITI - the prefilled Full name does not contain the profile first name (${output.greetingName})"
+- assertVisible:
+    text: '\+966'
+    enabled: false
+- assertVisible:
+    text: "[0-9]{8,10}"
+    enabled: false
+- assertVisible: "(?s).*I have read and understood Jahez.*"
+- assertVisible: "terms and condition"
+- assertVisible: "(?s).*I agree to open Jahez account.*"
+# Gate closed
+- assertNotVisible: "Continue"
+- takeScreenshot: baiti-consent-unticked
+
+# One consent is not enough (checkbox has no node: coordinate tap)
+- tapOn:
+    point: "7%,79%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertNotVisible: "Continue"
+# Both consents open the gate - Continue is NOT tapped
+- tapOn:
+    point: "7%,85%"
+- extendedWaitUntil:
+    visible: "Continue"
+    timeout: 5000
+- takeScreenshot: baiti-consent-both-ticked
+
+# Close without continuing
+- tapOn:
+    leftOf: "Complete your purchase"
+- extendedWaitUntil:
+    notVisible: "Complete your purchase"
+    timeout: 10000
+- assertVisible: 'Home\s*Tab 1 of 4'
+- assertVisible: "(?s)Baiti.*Discover"
+
+# Reopen: consents are reset
+- tapOn: "(?s)Baiti.*Everything your home needs.*Discover"
+- extendedWaitUntil:
+    visible: "Complete your purchase"
+    timeout: 20000
+- assertNotVisible: "Continue"
+- tapOn:
+    leftOf: "Complete your purchase"
+- extendedWaitUntil:
+    notVisible: "Complete your purchase"
+    timeout: 10000

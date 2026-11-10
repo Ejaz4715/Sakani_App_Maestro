@@ -1,0 +1,27 @@
+# Read-only: prove from the profile which account is signed in (no edits).
+# Requires: NATIONAL_ID; on Account tab. Sets output.profileNationalId.
+appId: fi.iwa.sakani
+name: Verify the signed-in account is NATIONAL_ID
+---
+# Safety guard: keep dollar-free or Maestro 2.9.0 skips evaluation
+- assertTrue: ${typeof NATIONAL_ID !== "undefined" && String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+
+- tapOn: "Profile details"
+# "Personal Details" (plural) on newer builds
+- extendedWaitUntil:
+    visible: "Personal Detail(s)?"
+    timeout: 30000
+
+# Verify the profile shows exactly NATIONAL_ID
+- assertVisible: "National ID"
+- assertVisible: ${NATIONAL_ID}
+- evalScript: ${output.profileNationalId = String(NATIONAL_ID)}
+
+- runFlow:
+    when:
+      visible: "Personal Detail(s)?"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "My bookings"
+    timeout: 30000

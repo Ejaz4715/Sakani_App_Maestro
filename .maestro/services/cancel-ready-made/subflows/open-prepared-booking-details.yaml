@@ -1,0 +1,67 @@
+# Helper (SAKANI-51392): open the prepared Active card and prove its Booking Details / Unit Details,
+# ending on Booking Details with "Cancel booking" offered (never tapped here). Read-only.
+# Requires: READY_MADE_PROJECT, READY_MADE_UNIT, BOOKING_UNIT_CODE, BOOKING_DATE, READY_MADE_BLOCK,
+# READY_MADE_APARTMENT, READY_MADE_BUILDING, READY_MADE_FLOOR. Starts on My bookings -> Active.
+appId: fi.iwa.sakani
+name: Open the prepared booking's details
+---
+- tapOn:
+    text: "(?s).*${READY_MADE_PROJECT}(?![0-9]).*\nActive\n.*\nUnit code\n${BOOKING_UNIT_CODE}\n.*"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: 'Booking Details\s*Tab 1 of 2'
+    timeout: 45000
+- assertVisible: "(?s).*${READY_MADE_PROJECT}(?![0-9]).*"
+- assertVisible: "Project Type"
+- assertVisible:
+    text: "Ready made"
+    label: "BOOKING DETAILS - the booking is not a Ready made project"
+- assertVisible: "Property Type"
+- assertVisible: "Booking date"
+- assertVisible:
+    text: ${BOOKING_DATE}
+    below: "Booking date"
+    label: "BOOKING DETAILS - booking date is not ${BOOKING_DATE}"
+- takeScreenshot: sakani-51392-booking-details
+
+# Unit Details tab: the same unit (label / value pairs)
+- tapOn: 'Unit Details\s*Tab 2 of 2'
+- extendedWaitUntil:
+    visible: ${READY_MADE_UNIT}
+    timeout: 30000
+- assertVisible:
+    text: ${READY_MADE_BLOCK}
+    below: "Block"
+    above: "Land Number"
+    leftOf: "Building"
+    label: "UNIT DETAILS - Block is not ${READY_MADE_BLOCK}"
+- assertVisible:
+    text: ${READY_MADE_APARTMENT}
+    below: "Block"
+    above: "Land Number"
+    leftOf: "Floor"
+    label: "UNIT DETAILS - Apartment is not ${READY_MADE_APARTMENT}"
+- assertVisible:
+    text: ${READY_MADE_BUILDING}
+    below: "Building"
+    above: "Floor"
+    rightOf: "Block"
+    label: "UNIT DETAILS - Building is not ${READY_MADE_BUILDING}"
+- assertVisible:
+    text: ${READY_MADE_FLOOR}
+    below: "Floor"
+    above: "Land Number"
+    rightOf: "Land Number"
+    label: "UNIT DETAILS - Floor is not ${READY_MADE_FLOOR}"
+- takeScreenshot: sakani-51392-unit-details
+
+# Back to Booking Details: the cancellation entry point is offered
+- tapOn: 'Booking Details\s*Tab 1 of 2'
+- extendedWaitUntil:
+    visible: "Ready made"
+    timeout: 30000
+- assertVisible:
+    text: "^Cancel booking$"
+    enabled: true
+    label: "BOOKING DETAILS - Cancel booking is not offered for the prepared booking"
+- takeScreenshot: sakani-51392-cancel-booking-offered

@@ -1,0 +1,24 @@
+# Open the Financial advisory service page from a launched, authenticated app.
+appId: fi.iwa.sakani
+name: Open the Financial advisory service page
+---
+- runFlow:
+    file: ../../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+- runFlow:
+    file: ../../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Account\s*Tab 4 of 4'
+      DESTINATION: '(Profile details|Invoices)'
+
+- evalScript: ${output.accountService = "Financial advisory"}
+- runFlow:
+    file: ../../../subflows/open-account-service.yaml
+
+# Either CTA is valid: no advisory yet vs. existing advisory
+- extendedWaitUntil:
+    visible: "(?s)(Get recommendation|Update my information)"
+    timeout: 45000
+- assertVisible: "Financial advisory"

@@ -1,0 +1,14 @@
+# Close the soft keyboard only while the IME is shown, and prove it is gone.
+# Workaround: a bare hideKeyboard sends BACK when no keyboard is open.
+appId: fi.iwa.sakani
+name: Dismiss the soft keyboard
+---
+- repeat:
+    times: 4
+    while:
+      visible:
+        id: ".*inputmethod.*"
+    commands:
+      - hideKeyboard
+      - waitForAnimationToEnd:
+          timeout: 1500

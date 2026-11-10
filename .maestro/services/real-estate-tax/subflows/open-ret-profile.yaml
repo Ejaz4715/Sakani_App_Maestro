@@ -1,0 +1,22 @@
+# Open Account > Real estate tax; arrives on the "First Home VAT Exemption" page.
+appId: fi.iwa.sakani
+name: Open the Profile / Real estate tax page
+---
+- runFlow:
+    file: ../../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+- runFlow:
+    file: ../../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Account\s*Tab 4 of 4'
+      DESTINATION: '(Profile details|Invoices)'
+
+- evalScript: ${output.accountService = "Real estate tax"}
+- runFlow:
+    file: ../../../subflows/open-account-service.yaml
+
+- extendedWaitUntil:
+    visible: "First Home VAT Exemption"
+    timeout: 45000

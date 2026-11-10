@@ -1,0 +1,33 @@
+# SAKANI-51392-TC-002: the prepared booking's Booking Details / Unit Details are correct and the
+# cancellation entry point "Cancel booking" is offered. Suite: cancel-ready-made.
+# Read-only: Cancel booking is asserted, never tapped.
+appId: fi.iwa.sakani
+name: SAKANI-51392-TC-002 Prepared booking details are correct and Cancel booking is offered
+tags:
+  - sakani-51392
+  - cancel-ready-made
+  - service
+  - functional
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1119880062" : String(NATIONAL_ID)}'
+  READY_MADE_PROJECT: '${typeof READY_MADE_PROJECT === "undefined" ? "Target Segment test 22" : String(READY_MADE_PROJECT)}'
+  READY_MADE_UNIT: '${typeof READY_MADE_UNIT === "undefined" ? "Apartment 190-113" : String(READY_MADE_UNIT)}'
+  BOOKING_UNIT_CODE: '${typeof BOOKING_UNIT_CODE === "undefined" ? "03-01-0030-190-113" : String(BOOKING_UNIT_CODE)}'
+  BOOKING_DATE: '${typeof BOOKING_DATE === "undefined" ? "19/10/2026" : String(BOOKING_DATE)}'
+  READY_MADE_BLOCK: '${typeof READY_MADE_BLOCK === "undefined" ? "190" : String(READY_MADE_BLOCK)}'
+  READY_MADE_APARTMENT: '${typeof READY_MADE_APARTMENT === "undefined" ? "113" : String(READY_MADE_APARTMENT)}'
+  READY_MADE_BUILDING: '${typeof READY_MADE_BUILDING === "undefined" ? "2" : String(READY_MADE_BUILDING)}'
+  READY_MADE_FLOOR: '${typeof READY_MADE_FLOOR === "undefined" ? "2" : String(READY_MADE_FLOOR)}'
+---
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: subflows/verify-prepared-booking.yaml
+- runFlow:
+    file: subflows/open-prepared-booking-details.yaml

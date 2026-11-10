@@ -1,0 +1,101 @@
+# SAKANI-23300-E2E-001: Financial Advisory from Home - existing advisory is only verified;
+# with none, the form is filled, certified and submitted once, then Purchasing power is verified.
+# Writes data only when no advisory exists (one real submission, never retried).
+appId: fi.iwa.sakani
+name: SAKANI-23300-E2E-001 Financial Advisory creates a recommendation when none exists, otherwise verifies the existing advisory
+tags:
+  - sakani-23300
+  - financial-advisor
+  - e2e
+  - service
+  - release-readiness
+  - writes-data
+env:
+  PRODUCT_TYPE: '${typeof PRODUCT_TYPE === "undefined" ? "Market Ready Unit" : PRODUCT_TYPE}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : INCOME}'
+  HOUSING_ALLOWANCE: '${typeof HOUSING_ALLOWANCE === "undefined" ? "2000" : HOUSING_ALLOWANCE}'
+  OTHER_ALLOWANCES: '${typeof OTHER_ALLOWANCES === "undefined" ? "500" : OTHER_ALLOWANCES}'
+  COMMITMENTS: '${typeof COMMITMENTS === "undefined" ? "1000" : COMMITMENTS}'
+  COMMITMENT_MONTHS: '${typeof COMMITMENT_MONTHS === "undefined" ? "24" : COMMITMENT_MONTHS}'
+  SAVINGS: '${typeof SAVINGS === "undefined" ? "50000" : SAVINGS}'
+---
+# Cold start at Home (session is reused)
+- stopApp
+- launchApp
+
+# Open Financial Advisory
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+- evalScript: ${output.hasAdvisory = false}
+- runFlow:
+    when:
+      visible: "Purchasing power"
+    commands:
+      - evalScript: ${output.hasAdvisory = true}
+
+# Existing advisory: verify only - nothing is edited or submitted
+- runFlow:
+    when:
+      true: ${output.hasAdvisory}
+    commands:
+      - assertVisible: "Financial advisory"
+      - assertVisible:
+          text: "[0-9][0-9,]*"
+          below: "Purchasing power"
+      - takeScreenshot: financial-advisor-existing-advisory
+      - evalScript: "${console.log('E2E-001 - existing advisory verified; nothing edited or submitted')}"
+
+# No advisory: fill, certify, submit once
+- runFlow:
+    when:
+      true: ${!output.hasAdvisory}
+    commands:
+      # Fail closed before any input if an advisory is actually present
+      - assertVisible:
+          text: "Get recommendation"
+          label: "BLOCKED - no Get recommendation CTA; refusing to start a new advisory"
+      - assertNotVisible:
+          text: "Update my information"
+          label: "BLOCKED - an advisory exists (Update my information shown); it must not be modified"
+      - runFlow:
+          file: subflows/fill-fa-form.yaml
+          env:
+            PRODUCT_TYPE: ${PRODUCT_TYPE}
+            INCOME: ${INCOME}
+            HOUSING_ALLOWANCE: ${HOUSING_ALLOWANCE}
+            OTHER_ALLOWANCES: ${OTHER_ALLOWANCES}
+            COMMITMENTS: ${COMMITMENTS}
+            COMMITMENT_MONTHS: ${COMMITMENT_MONTHS}
+            SAVINGS: ${SAVINGS}
+      - assertVisible: ${PRODUCT_TYPE}
+      - assertVisible: "(?s)I certify that the.*"
+      - assertVisible: "Submit"
+      - runFlow:
+          file: ../../subflows/dismiss-keypad.yaml
+      # Certification checkbox has no node: same proven footer point as submit-fa.yaml
+      - tapOn:
+          point: "7%,82%"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      # State-changing: Submit - exactly one tap, never retried
+      - tapOn:
+          text: "Submit"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "(?s)(Success!|We apologize|Error)"
+          timeout: 90000
+      - assertVisible: "Success!"
+      - assertVisible: "(?s).*financial recommendation has been successfully issued.*"
+      - tapOn: "Done"
+      # Result on the Financial advisory page
+      - runFlow:
+          file: subflows/open-financial-advisory.yaml
+      - extendedWaitUntil:
+          visible: "Purchasing power"
+          timeout: 45000
+      - assertVisible: "Financial advisory"
+      - assertVisible:
+          text: "[0-9][0-9,]*"
+          below: "Purchasing power"
+      - takeScreenshot: financial-advisor-submitted-result
+      - evalScript: "${console.log('E2E-001 - new advisory submitted once; Purchasing power shown')}"

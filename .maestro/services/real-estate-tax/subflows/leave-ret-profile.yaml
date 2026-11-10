@@ -1,0 +1,12 @@
+# Leave the "First Home VAT Exemption" page (no tab bar; hardware back does not work).
+appId: fi.iwa.sakani
+name: Leave the First Home VAT Exemption page
+---
+# Unlabelled back arrow tapped by point (same point as clear-overlays.yaml)
+- tapOn:
+    point: "7%,9%"
+# Verify the page closed
+- extendedWaitUntil:
+    visible: 'Services\s*Tab 3 of 4'
+    timeout: 30000
+- assertNotVisible: "First Home VAT Exemption"

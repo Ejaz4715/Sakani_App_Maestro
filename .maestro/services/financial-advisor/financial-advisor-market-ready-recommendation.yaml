@@ -1,0 +1,146 @@
+# SAKANI-23300-TC-001: Market Ready Unit issues a recommendation reflected on the profile.
+# Writes data: submits a real financial advisory and overwrites stored advisory data.
+appId: fi.iwa.sakani
+name: SAKANI-23300-TC-001 Market Ready Unit issues a financial recommendation
+tags:
+  - sakani-23300
+  - financial-advisor
+  - service
+  - functional
+  - writes-data
+  - health-check
+env:
+  PRODUCT_TYPE: '${typeof PRODUCT_TYPE === "undefined" ? "Market Ready Unit" : String(PRODUCT_TYPE)}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : String(INCOME)}'
+  HOUSING_ALLOWANCE: '${typeof HOUSING_ALLOWANCE === "undefined" ? "2000" : String(HOUSING_ALLOWANCE)}'
+  OTHER_ALLOWANCES: '${typeof OTHER_ALLOWANCES === "undefined" ? "500" : String(OTHER_ALLOWANCES)}'
+  COMMITMENTS: '${typeof COMMITMENTS === "undefined" ? "1000" : String(COMMITMENTS)}'
+  COMMITMENT_MONTHS: '${typeof COMMITMENT_MONTHS === "undefined" ? "24" : String(COMMITMENT_MONTHS)}'
+  SAVINGS: '${typeof SAVINGS === "undefined" ? "50000" : String(SAVINGS)}'
+  # Declared so the reflected down payment can be read back
+  DOWN_PAYMENT: '${typeof DOWN_PAYMENT === "undefined" ? "0" : String(DOWN_PAYMENT)}'
+---
+# Cold start (session is kept)
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+
+- runFlow:
+    file: subflows/fill-fa-form.yaml
+    env:
+      PRODUCT_TYPE: ${PRODUCT_TYPE}
+      INCOME: ${INCOME}
+      HOUSING_ALLOWANCE: ${HOUSING_ALLOWANCE}
+      OTHER_ALLOWANCES: ${OTHER_ALLOWANCES}
+      COMMITMENTS: ${COMMITMENTS}
+      COMMITMENT_MONTHS: ${COMMITMENT_MONTHS}
+      SAVINGS: ${SAVINGS}
+      DOWN_PAYMENT: ${DOWN_PAYMENT}
+
+# Verify product type before submitting
+- assertVisible: ${PRODUCT_TYPE}
+
+# State-changing: submit the advisory
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- assertVisible: "(?s)I certify that the.*"
+# Certification checkbox has no node: proven footer point, tapped once
+- tapOn:
+    point: "7%,82%"
+- waitForAnimationToEnd:
+    timeout: 2000
+# Submit - exactly one tap, never retried
+- tapOn:
+    text: "Submit"
+    retryTapIfNoChange: false
+
+# Verify recommendation success
+- extendedWaitUntil:
+    visible: "Success!"
+    timeout: 90000
+- assertVisible: "(?s).*financial recommendation has been successfully issued.*"
+- assertVisible: "(?s).*visit your profile to check your financial recommendation.*"
+- takeScreenshot: sakani-23300-tc-001-recommendation-success
+- tapOn: "Done"
+
+# Verify result on the Financial advisory page
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+- extendedWaitUntil:
+    visible: "Purchasing power"
+    timeout: 45000
+
+# Calculated-at timestamp
+- assertVisible: "(?s)[0-9]{2}/[0-9]{2}/[0-9]{4} at [0-9]{1,2}:[0-9]{1,2}"
+# Purchasing power figure
+- assertVisible: "[0-9][0-9,]*"
+
+# Verify submitted inputs are reflected back
+- scrollUntilVisible:
+    element:
+      text: "Civil - Government Sector\\s*"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Type of Employment"
+- assertVisible: "Civil - Government Sector\\s*"
+
+- scrollUntilVisible:
+    element:
+      text: "Bank Albilad\\s*"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Bank Albilad\\s*"
+
+# Verify each amount within its own row
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "Basic Salary"
+      ABOVE: "Housing allowance"
+      EXPECTED: ${Number(INCOME).toLocaleString("en-US")}
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "Housing allowance"
+      ABOVE: "Other allowances"
+      EXPECTED: ${Number(HOUSING_ALLOWANCE).toLocaleString("en-US")}
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "Other allowances"
+      ABOVE: "Commitments"
+      EXPECTED: ${Number(OTHER_ALLOWANCES).toLocaleString("en-US")}
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "Monthly commitments"
+      ABOVE: "Duration of commitments"
+      EXPECTED: ${Number(COMMITMENTS).toLocaleString("en-US")}
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "Duration of commitments"
+      ABOVE: "Down payment"
+      EXPECTED: ${String(COMMITMENT_MONTHS)}
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "The value of the down payment"
+      ABOVE: "Savings"
+      EXPECTED: ${Number(DOWN_PAYMENT).toLocaleString("en-US")}
+- runFlow:
+    file: subflows/assert-reflected-amount.yaml
+    env:
+      BELOW: "Value of down payment"
+      ABOVE: "Products"
+      EXPECTED: ${Number(SAVINGS).toLocaleString("en-US")}
+
+# Verify product type
+- scrollUntilVisible:
+    element:
+      text: "Product Type"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: ${PRODUCT_TYPE}
+- takeScreenshot: sakani-23300-tc-001-profile-reflection

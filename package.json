@@ -1,0 +1,28 @@
+{
+  "name": "Sakani-mobileapp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node report-dashboard/run-and-report.js --exclude-tags needs-active-financial-application",
+    "test:services:core": "node report-dashboard/run-and-report.js --service core --exclude-tags needs-active-financial-application",
+    "test:e2e": "node report-dashboard/run-and-report.js --scope e2e --include-e2e --yes-i-understand-this-changes-business-data",
+    "e2e:full-journey": "node report-dashboard/run-and-report.js --include-e2e --yes-i-understand-this-changes-business-data --flows full-journey",
+    "e2e:full-journey-paid": "node report-dashboard/run-and-report.js --include-e2e --yes-i-understand-this-changes-business-data --flows full-journey-paid",
+    "e2e:check-eligibility": "node report-dashboard/run-and-report.js --include-e2e --yes-i-understand-this-changes-business-data --flows \"check-eligibility\"",
+    "e2e:appeal-request": "node report-dashboard/run-and-report.js --include-e2e --yes-i-understand-this-changes-business-data --flows appeal-request",
+    "e2e:cancel-booking": "node report-dashboard/run-and-report.js --include-e2e --yes-i-understand-this-changes-business-data --flows cancel-booking",
+    "test:services": "node report-dashboard/run-and-report.js --scope services --exclude-tags needs-ineligible-account,needs-active-financial-application,needs-flexible-payment-booking",
+    "test:services:functional": "node report-dashboard/run-and-report.js --scope services --include-tags functional --exclude-tags needs-ineligible-account,needs-flexible-payment-booking",
+    "test:services:e2e": "node report-dashboard/run-and-report.js --scope services --include-tags e2e",
+    "test:service": "node report-dashboard/run-and-report.js --exclude-tags needs-ineligible-account,needs-greeting-history,needs-active-financial-application,needs-flexible-payment-booking --service",
+    "test:consolidated": "node report-dashboard/run-and-report.js --scope services --exclude-tags needs-ineligible-account,needs-active-financial-application,needs-flexible-payment-booking",
+    "list": "node report-dashboard/run-maestro.js --scope all --include-e2e --yes-i-understand-this-changes-business-data --list",
+    "merge-results": "node report-dashboard/merge-results.js",
+    "generate-report": "node report-dashboard/generate-dashboard.js",
+    "post-test": "npm run merge-results && npm run generate-report",
+    "clean-history": "node -e \"require('fs').rmSync('report-dashboard/test-reports-history',{recursive:true,force:true})\"",
+    "test:sakani-51392": "node report-dashboard/run-and-report.js --flows \"cancel ready made project\"",
+    "test:sakani-50700": "node report-dashboard/run-and-report.js --flows \"flexible payment\""
+  }
+}

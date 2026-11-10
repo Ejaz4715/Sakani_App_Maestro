@@ -1,0 +1,22 @@
+# Helper: from the create chooser, pick an event occasion and open the create-event form
+appId: fi.iwa.sakani
+name: Open the create-event form
+---
+- tapOn: "Create Event"
+- extendedWaitUntil:
+    visible: "Tag 1"
+    timeout: 45000
+
+- repeat:
+    times: 4
+    while:
+      notVisible: "(?s).*Event name.*"
+    commands:
+      # Optional: Tag 1 may be absent while the form is opening; arrival is proven below
+      - tapOn:
+          text: "Tag 1"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 6000
+
+- assertVisible: "(?s).*Event name.*"

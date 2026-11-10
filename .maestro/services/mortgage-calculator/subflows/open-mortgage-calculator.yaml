@@ -1,0 +1,55 @@
+# From an authenticated Home, open the Mortgage Calculator via a marketplace unit
+appId: fi.iwa.sakani
+name: Open the Mortgage Calculator from a marketplace unit
+---
+- runFlow:
+    file: ../../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+- runFlow:
+    file: ../../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Explore\s*Tab 2 of 4'
+      DESTINATION: "(?s).*Discover featured unit in the market.*"
+
+- tapOn: "View all"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Category sheet appears only when no category is chosen; pick Buy + Ready Units
+- runFlow:
+    when:
+      visible: "Select category"
+    commands:
+      - tapOn: "Buy"
+      - tapOn: "Ready Units"
+      - tapOn: "Start searching"
+      - extendedWaitUntil:
+          visible: "(?s).*Discover featured unit in the market.*"
+          timeout: 60000
+      - tapOn: "View all"
+      - waitForAnimationToEnd:
+          timeout: 5000
+
+# Open a unit card by unit code; may land on the unit page or straight on the form
+- runFlow:
+    file: ../../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: "(?s).*(Villa|Apartment) [0-9A-Z][0-9A-Za-z-]*.*"
+      DESTINATION: "(?s)(Mortgage Calculator|Financial information)"
+
+# Only needed when the loop stopped on the unit detail page
+- runFlow:
+    when:
+      notVisible: "Financial information"
+    commands:
+      - runFlow:
+          file: ../../../subflows/tap-until-destination.yaml
+          env:
+            TARGET: "Mortgage Calculator"
+            DESTINATION: "Financial information"
+
+- extendedWaitUntil:
+    visible: "Financial information"
+    timeout: 45000

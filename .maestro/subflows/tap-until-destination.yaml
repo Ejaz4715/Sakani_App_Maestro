@@ -1,0 +1,20 @@
+# Tap TARGET until DESTINATION is proven, handling the NPS survey each pass.
+# Requires: TARGET, DESTINATION (regex). Use only for navigation safe to repeat.
+appId: fi.iwa.sakani
+name: Tap until the destination is proven
+---
+- repeat:
+    times: 6
+    while:
+      notVisible: ${DESTINATION}
+    commands:
+      - runFlow:
+          file: dismiss-nps.yaml
+      - tapOn:
+          text: ${TARGET}
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 3000
+
+# Arrival is proven by the destination screen, not by the tap
+- assertVisible: ${DESTINATION}

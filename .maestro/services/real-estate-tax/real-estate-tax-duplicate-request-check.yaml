@@ -1,0 +1,57 @@
+# SAKANI-23459-TC-004: repeated "Request a service" routes to the same certificate.
+# Regression guard for duplicate VAT requests (SAKANI-7592 / SAKANI-7559).
+appId: fi.iwa.sakani
+name: SAKANI-23459-TC-004 Duplicate request check
+tags:
+  - sakani-23459
+  - real-estate-tax
+  - service
+  - functional
+  - health-check
+---
+# Cold start (session is kept)
+- stopApp
+- launchApp
+
+# Safety guard: certificate must already exist (else the CTA raises a real VAT request)
+# Do not run against 1012204739: its certificate number is shared with another beneficiary
+- runFlow:
+    file: subflows/open-ret-profile.yaml
+- assertVisible: "Certificate Issued successfully"
+- runFlow:
+    file: subflows/leave-ret-profile.yaml
+
+# Pass 1: request the service and capture the certificate number
+- runFlow:
+    file: subflows/open-vat-service.yaml
+- tapOn: "Request a service"
+- extendedWaitUntil:
+    visible: "First Home VAT Exemption"
+    timeout: 45000
+- assertVisible: "Certificate Issued successfully"
+
+- copyTextFrom: "[0-9]{10,}"
+- evalScript: ${output.certFirst = String(maestro.copiedText)}
+- evalScript: "${console.log('TC-004 certificate after pass 1 = ' + output.certFirst)}"
+- takeScreenshot: sakani-23459-tc-004-pass-1
+
+# Pass 2: same CTA again (leave the exemption page by its own back arrow first)
+- runFlow:
+    file: subflows/leave-ret-profile.yaml
+- runFlow:
+    file: subflows/open-vat-service.yaml
+- tapOn: "Request a service"
+- extendedWaitUntil:
+    visible: "First Home VAT Exemption"
+    timeout: 45000
+- assertVisible: "Certificate Issued successfully"
+
+- copyTextFrom: "[0-9]{10,}"
+- evalScript: ${output.certSecond = String(maestro.copiedText)}
+- evalScript: "${console.log('TC-004 certificate after pass 2 = ' + output.certSecond)}"
+
+# Verify same certificate and no new request
+- assertTrue: ${output.certFirst === output.certSecond}
+- assertNotVisible: "(?s).*request has been submitted.*"
+
+- takeScreenshot: sakani-23459-tc-004-pass-2

@@ -1,0 +1,164 @@
+# SAKANI-51392: an Active Financial Application blocks cancelling the existing Active booking
+# Needs 1010040739 (Active booking + Active Financial Application); never books. Opt-in only
+appId: fi.iwa.sakani
+name: Cancel ready made project - Active Financial Application blocks cancelling the Active booking
+tags:
+  - core
+  - health-check
+  - sakani-51392
+  # Dedicated data (1010040739: Active booking + Active Financial Application) - opt-in only
+  - needs-active-financial-application
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1010040739" : String(NATIONAL_ID)}'
+  # Pin a specific Active booking by unit code; empty = the first Active card (recorded)
+  BOOKING_UNIT_CODE: '${typeof BOOKING_UNIT_CODE === "undefined" ? "" : String(BOOKING_UNIT_CODE)}'
+  # Exact live block sheet (whitespace-flexible match only)
+  BLOCK_TITLE: '${typeof BLOCK_TITLE === "undefined" ? "Financial Application detected!" : String(BLOCK_TITLE)}'
+  BLOCK_MESSAGE: '${typeof BLOCK_MESSAGE === "undefined" ? "Sorry, you cannot cancel this booking as you already have a financial application." : String(BLOCK_MESSAGE)}'
+---
+- assertTrue:
+    condition: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+    label: "FAIL - NATIONAL_ID is not a 10-digit ID"
+- evalScript: '${output.cardRx = String(BOOKING_UNIT_CODE).length > 0 ? "(?s).*\\nActive\\n.*\\nUnit code\\n" + String(BOOKING_UNIT_CODE) + "\\n.*" : "(?s).*\\nActive\\n.*\\nUnit code\\n.*"}'
+# Exact-text matchers (regex-escaped; each run of spaces matches any whitespace)
+# The text must be a COMPLETE line of the node (live: the message node also holds "I understand")
+- evalScript: '${output.blockRx = "(?s)(?:.*\\n)?\\s*" + String(BLOCK_MESSAGE).trim().replace(/[.*+?^()|\[\]\\{}]/g, function (c) { return "\\" + c; }).replace(/\s+/g, "\\s*") + "\\s*(?:\\n.*)?"}'
+- evalScript: '${output.titleRx = "(?s)(?:.*\\n)?\\s*" + String(BLOCK_TITLE).trim().replace(/[.*+?^()|\[\]\\{}]/g, function (c) { return "\\" + c; }).replace(/\s+/g, "\\s*") + "\\s*(?:\\n.*)?"}'
+
+# 1. Login and prove the account
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- runFlow:
+    file: ../../subflows/verify-signed-in-account.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- assertTrue:
+    condition: ${output.loginNationalId === String(NATIONAL_ID) && output.profileNationalId === String(NATIONAL_ID)}
+    label: "FAIL - signed-in account is not ${NATIONAL_ID}"
+
+# 2. My bookings -> Active: an Active booking must exist (only the Active tab counts)
+- tapOn: "My bookings"
+- extendedWaitUntil:
+    visible: 'Active\s*Tab 2 of 4'
+    timeout: 45000
+- tapOn: 'Active\s*Tab 2 of 4'
+- extendedWaitUntil:
+    visible: "(?s).*(\nActive\n.*Unit code|don.t have any active booking).*"
+    timeout: 60000
+- assertNotVisible:
+    text: "(?s).*don.t have any active booking.*"
+    label: "BLOCKED - TEST DATA: ACTIVE BOOKING NOT FOUND for ${NATIONAL_ID}"
+- scrollUntilVisible:
+    element:
+      text: ${output.cardRx}
+    direction: DOWN
+    timeout: 30000
+    label: "BLOCKED - TEST DATA: ACTIVE BOOKING NOT FOUND (${BOOKING_UNIT_CODE})"
+- copyTextFrom:
+    text: ${output.cardRx}
+    index: 0
+- evalScript: ${output.activeCard = String(maestro.copiedText)}
+# Unit codes can contain "/": take the whole line after "Unit code"
+- evalScript: '${output.unitCode = (output.activeCard.match(/Unit code\n([^\n]+)/) || ["", ""])[1].trim()}'
+- evalScript: '${output.unitCodeRx = output.unitCode.replace(/[.*+?^()|\[\]\\{}\/]/g, function (c) { return "\\" + c; })}'
+- evalScript: "${console.log('CANCEL BLOCK - Active card [' + output.activeCard.replace(/\\n/g, ' | ') + '] unit code [' + output.unitCode + ']')}"
+- assertTrue:
+    condition: ${output.unitCode.length > 0}
+    label: "BLOCKED - TEST DATA: the Active card shows no unit code"
+- takeScreenshot: cancel-block-01-active-booking
+
+# 3. Open it: Booking Details loads, Cancel booking is offered
+- tapOn:
+    text: "(?s).*\nActive\n.*\nUnit code\n${output.unitCodeRx}\n.*"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: 'Booking Details\s*Tab 1 of 2'
+    timeout: 45000
+- assertVisible: "Project type|Project Type"
+- scrollUntilVisible:
+    element:
+      text: "^Cancel booking$"
+    direction: DOWN
+    timeout: 30000
+    label: "BOOKING DETAILS - Cancel booking is not offered"
+- takeScreenshot: cancel-block-02-booking-details
+
+# 4. State-touching: tap Cancel booking ONCE; no reason or confirmation is ever tapped
+- tapOn:
+    text: "^Cancel booking$"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "(?s)(.*[Ff]inancial [Aa]pplication.*|Can you let us know the reason for the cancellation\\?|.*booking fee is not refunded.*|.*There.s something wrong.*)"
+    timeout: 45000
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: cancel-block-03-after-cancel-booking
+
+# Normal cancellation opened -> the block did not happen: stop here (nothing chosen or confirmed)
+- runFlow:
+    when:
+      visible: "(?s)(Can you let us know the reason for the cancellation\\?|.*booking fee is not refunded.*)"
+    commands:
+      - takeScreenshot: cancel-block-FAIL-normal-cancellation-opened
+      - assertNotVisible:
+          text: "(?s)(Can you let us know the reason for the cancellation\\?|.*booking fee is not refunded.*)"
+          label: "FAIL - ACTIVE FINANCIAL APPLICATION DID NOT BLOCK CANCELLATION (normal cancellation opened; stopped, nothing confirmed)"
+
+# Product error instead of a response -> fail with the real cause
+- runFlow:
+    when:
+      visible: "(?s).*There.s something wrong.*"
+    commands:
+      - assertNotVisible:
+          text: "(?s).*There.s something wrong.*"
+          label: "FAIL - PRODUCT ERROR after Cancel booking (no block sheet; nothing confirmed)"
+
+# The block sheet: exact live title and message
+- assertVisible:
+    text: ${output.titleRx}
+    label: "FAIL - no '${BLOCK_TITLE}' block after Cancel booking"
+- assertVisible:
+    text: ${output.blockRx}
+    label: "FAIL - the block message is not: ${BLOCK_MESSAGE}"
+- copyTextFrom: ${output.blockRx}
+- evalScript: "${console.log('CANCEL BLOCK - message shown [' + String(maestro.copiedText).replace(/\\n/g, ' | ') + ']')}"
+# The sheet's only action (never tapped)
+- assertVisible: "(?s)(?:.*\n)?I understand(?:\n.*)?"
+- takeScreenshot: cancel-block-04-block-message
+
+# 5. The booking is still Active (fresh launch, session kept; no dialog button tapped)
+- stopApp
+- launchApp
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- tapOn: "My bookings"
+- extendedWaitUntil:
+    visible: 'Active\s*Tab 2 of 4'
+    timeout: 45000
+- tapOn: 'Active\s*Tab 2 of 4'
+- extendedWaitUntil:
+    visible: "(?s).*(\nActive\n.*Unit code|don.t have any active booking).*"
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      text: "(?s).*\nActive\n.*\nUnit code\n${output.unitCodeRx}\n.*"
+    direction: DOWN
+    timeout: 30000
+    label: "FAIL - booking ${output.unitCode} is no longer Active after the blocked cancellation"
+- takeScreenshot: cancel-block-05-booking-still-active
+- evalScript: "${console.log('CANCEL BLOCK END - cancellation blocked; booking ' + output.unitCode + ' still Active')}"

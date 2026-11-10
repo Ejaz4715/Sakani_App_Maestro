@@ -1,0 +1,30 @@
+# From an authenticated Home, open the Mortgage Calculator form via Services > Professional Services
+# Navigation only: no field is filled, cleared or calculated
+appId: fi.iwa.sakani
+name: Open the Mortgage Calculator from the Services tab
+---
+- runFlow:
+    file: ../../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+# Services tab (handles NPS)
+- runFlow:
+    file: ../../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Services\s*Tab 3 of 4'
+      DESTINATION: "Categories"
+- tapOn: "(?s).*Professional Services.*"
+- extendedWaitUntil:
+    visible: "Explore Professional Services"
+    timeout: 30000
+- tapOn: "(?s).*Mortgage Calculator.*"
+
+# Service page, then the form
+- extendedWaitUntil:
+    visible: "Calculate Your Mortgage"
+    timeout: 30000
+- tapOn: "Calculate Your Mortgage"
+- extendedWaitUntil:
+    visible: "Financial information"
+    timeout: 45000

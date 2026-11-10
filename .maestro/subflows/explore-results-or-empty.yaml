@@ -1,0 +1,17 @@
+# Explore after the filter sheet: results OR "No properties found" (account-side saved location, survives clearState)
+# Caller MUST then search its target project/location, which replaces the saved location; output.exploreStartedEmpty
+appId: fi.iwa.sakani
+name: Explore results or saved-location empty state
+---
+- extendedWaitUntil:
+    visible: '(Projects\s*Tab 1 of 2|No properties found)'
+    timeout: 45000
+    label: "EXPLORE - neither results nor the empty state after the filter sheet"
+- evalScript: ${output.exploreStartedEmpty = false}
+- runFlow:
+    when:
+      visible: "No properties found"
+    commands:
+      - evalScript: ${output.exploreStartedEmpty = true}
+      - takeScreenshot: explore-saved-location-empty
+      - evalScript: "${console.log('EXPLORE - saved location gives No properties found; the target search replaces it')}"

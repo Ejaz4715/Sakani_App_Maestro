@@ -1,0 +1,61 @@
+# Suite: cancel-ready-made
+# Jira: SAKANI-51392
+# Test Case: SAKANI-51392-E2E-001
+# Type: E2E
+# Start Point: Authenticated Sakani Home (1119880062, shared login)
+# End Point: Cancellation reason selected, "Confirm cancellation" enabled - immediately BEFORE the
+#   committing tap (safe end point). With MOH_FA_CONFIRMED not true it stops earlier, on Booking
+#   Details, BLOCKED - TEST DATA / BACKEND PREREQUISITE, without tapping Cancel booking.
+# Scenario: Home -> Account -> My bookings -> Active -> prepared Ready Made booking -> Booking Details
+#   -> MOH Financial Application gate -> Cancel booking -> reason -> Confirm cancellation ready.
+# Not writes-data: Confirm cancellation is never tapped here (that is TC-004, double-gated).
+appId: fi.iwa.sakani
+name: SAKANI-51392-E2E-001 Cancel ready made - Home to Confirm cancellation ready (safe end point)
+tags:
+  - sakani-51392
+  - cancel-ready-made
+  - service
+  - e2e
+  - release-readiness
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1119880062" : String(NATIONAL_ID)}'
+  READY_MADE_PROJECT: '${typeof READY_MADE_PROJECT === "undefined" ? "Target Segment test 22" : String(READY_MADE_PROJECT)}'
+  READY_MADE_UNIT: '${typeof READY_MADE_UNIT === "undefined" ? "Apartment 190-113" : String(READY_MADE_UNIT)}'
+  BOOKING_UNIT_CODE: '${typeof BOOKING_UNIT_CODE === "undefined" ? "03-01-0030-190-113" : String(BOOKING_UNIT_CODE)}'
+  BOOKING_DATE: '${typeof BOOKING_DATE === "undefined" ? "19/10/2026" : String(BOOKING_DATE)}'
+  READY_MADE_BLOCK: '${typeof READY_MADE_BLOCK === "undefined" ? "190" : String(READY_MADE_BLOCK)}'
+  READY_MADE_APARTMENT: '${typeof READY_MADE_APARTMENT === "undefined" ? "113" : String(READY_MADE_APARTMENT)}'
+  READY_MADE_BUILDING: '${typeof READY_MADE_BUILDING === "undefined" ? "2" : String(READY_MADE_BUILDING)}'
+  READY_MADE_FLOOR: '${typeof READY_MADE_FLOOR === "undefined" ? "2" : String(READY_MADE_FLOOR)}'
+  # Backend attestation only (never inferred): set true + evidence once the MOH record is verified
+  MOH_FA_CONFIRMED: '${typeof MOH_FA_CONFIRMED === "undefined" ? "false" : String(MOH_FA_CONFIRMED)}'
+  MOH_FA_EVIDENCE: '${typeof MOH_FA_EVIDENCE === "undefined" ? "" : String(MOH_FA_EVIDENCE)}'
+  # Reason named by SAKANI-51838's reproduction steps
+  CANCEL_REASON: '${typeof CANCEL_REASON === "undefined" ? "Reject by bank" : String(CANCEL_REASON)}'
+---
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- takeScreenshot: sakani-51392-e2e-001-01-start-authenticated-home
+
+- runFlow:
+    file: subflows/verify-prepared-booking.yaml
+- runFlow:
+    file: subflows/open-prepared-booking-details.yaml
+
+# Prerequisite gate: stops here (Cancel booking NOT tapped) until the MOH record is attested
+- runFlow:
+    file: subflows/moh-financial-application-gate.yaml
+
+- runFlow:
+    file: subflows/open-cancellation-reason.yaml
+- takeScreenshot: sakani-51392-e2e-001-99-safe-end-point
+- evalScript: "${console.log('SAKANI-51392 E2E-001 SAFE END POINT - reason [' + CANCEL_REASON + '] selected, Confirm cancellation enabled and NOT tapped (booking ' + BOOKING_UNIT_CODE + ' untouched)')}"

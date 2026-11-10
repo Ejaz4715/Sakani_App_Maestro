@@ -1,0 +1,182 @@
+# Clear first-run/promo overlays until the caller ANCHOR is visible.
+# Safety: never taps survey-only "Submit" or "Update email"; every Back is guarded.
+appId: fi.iwa.sakani
+name: Clear first-run and promo overlays
+---
+- repeat:
+    # Bounded loop with early exit once ANCHOR is visible
+    times: 26
+    while:
+      notVisible: ${ANCHOR}
+    commands:
+      # Per-pass flag: set true only after a real action
+      - evalScript: ${output.handled = false}
+      # Single gate check; keep this list in step with the handlers below
+      - runFlow:
+          when:
+            visible: "(?s)(?:Don.t allow|Skip|Dismiss|Ok|Marketplace Day|Start comparing properties|Go to the weekly (offer|deal)|Update email|Number and Email Already Linked|.*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*|Thank you for your feedback|Maybe Later|Reject cookies)"
+          commands:
+            # Android notification permission dialog - declined (no device permission change)
+            - runFlow:
+                when:
+                  visible: "Don.t allow"
+                commands:
+                  - tapOn: "Don.t allow"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # Onboarding carousel - one Skip clears it
+            - runFlow:
+                when:
+                  visible: "Skip"
+                commands:
+                  - tapOn: "Skip"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # Satisfaction survey may reappear after dismissal (known issue)
+            - runFlow:
+                when:
+                  visible: "Dismiss"
+                commands:
+                  - tapOn: "Dismiss"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # Error dialog: same text as a real reservation/payment error, so dismissal is logged.
+            - runFlow:
+                when:
+                  visible: "Ok"
+                commands:
+                  - runFlow:
+                      when:
+                        visible: "There's something wrong. Please try again later!"
+                      commands:
+                        # Double-quoted: message contains ": "
+                        - evalScript: "${console.log('CLEAR-OVERLAYS OK-HANDLER: dismissing the ERROR dialog (there is something wrong / please try again later). If this line sits after a reservation, payment or signature step, the business outcome MUST be re-read from the product records before the run is called green.')}"
+                  - evalScript: "${console.log('CLEAR-OVERLAYS OK-HANDLER: tapping Ok')}"
+                  - tapOn: "Ok"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # "Marketplace Day" countdown sheet
+            - runFlow:
+                when:
+                  visible: "Marketplace Day"
+                commands:
+                  - back
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # Compare coach mark
+            - runFlow:
+                when:
+                  visible: "Start comparing properties"
+                commands:
+                  - back
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # "Sakani sharrai / weekly deal" promo sheet
+            - runFlow:
+                when:
+                  visible: "Go to the weekly (offer|deal)"
+                commands:
+                  - back
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # Contact info prompt - Back only; never tap "Update email" (writes to account)
+            - runFlow:
+                when:
+                  visible: "Update email"
+                commands:
+                  - back
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # "Number and Email Already Linked" screen - Workaround: tap its unlabeled back arrow.
+            # Safety: never tap "Update information" (writes to account).
+            - runFlow:
+                when:
+                  visible: "Number and Email Already Linked"
+                commands:
+                  - tapOn:
+                      point: "7%,9%"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 4000
+
+            # NPS survey - known defect guard, handled by dismiss-nps.yaml
+            - runFlow:
+                when:
+                  visible: "(?s)(.*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*|Thank you for your feedback)"
+                commands:
+                  - runFlow:
+                      file: dismiss-nps.yaml
+                  - evalScript: ${output.handled = true}
+
+            # Biometric enrolment offer - Maybe Later
+            - runFlow:
+                when:
+                  visible: "Maybe Later"
+                commands:
+                  - tapOn: "Maybe Later"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 3000
+
+            # Cookie-consent modal on WebView pages - Reject cookies
+            - runFlow:
+                when:
+                  visible: "Reject cookies"
+                commands:
+                  - tapOn: "Reject cookies"
+                  - evalScript: ${output.handled = true}
+                  - waitForAnimationToEnd:
+                      timeout: 4000
+
+      # Settle only on a pass that handled nothing
+      - runFlow:
+          when:
+            true: ${output.handled !== true}
+          commands:
+            - waitForAnimationToEnd:
+                timeout: 5000
+
+# NPS final pass (skipped when output.npsLeftToCaller is set)
+- runFlow:
+    when:
+      true: ${output.npsLeftToCaller !== true}
+    commands:
+      - runFlow:
+          file: dismiss-nps.yaml
+
+# Exit contract: return only once ANCHOR is visible, handling NPS each round.
+# Skipped when output.anchorOptional is set (post-login.yaml).
+- runFlow:
+    when:
+      true: ${output.anchorOptional !== true}
+    commands:
+      - repeat:
+          times: 6
+          while:
+            notVisible: ${ANCHOR}
+          commands:
+            - extendedWaitUntil:
+                visible: "(?s)(?:${ANCHOR}|.*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*|Thank you for your feedback)"
+                timeout: 120000
+            - runFlow:
+                file: dismiss-nps.yaml
+      # Handle a late NPS survey; never assert on it (known defect)
+      - runFlow:
+          file: dismiss-nps.yaml
+      - assertVisible: ${ANCHOR}

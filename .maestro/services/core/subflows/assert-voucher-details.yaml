@@ -1,0 +1,39 @@
+# Helper: assert the open voucher details page matches its Home card
+# Requires open-home-voucher.yaml to have set output.cardCategory / cardDiscount
+appId: fi.iwa.sakani
+name: Assert the opened voucher matches its Home card
+---
+# Same category and discount as the card
+- assertVisible:
+    text: ${output.cardDiscount}
+    above: "(?s).*customers viewed this voucher.*"
+- assertVisible:
+    text: ${output.cardCategory}
+    above: "(?s).*customers viewed this voucher.*"
+# Expiry date and views count
+- assertVisible: "(?s)Expiry date: [0-9]{2}/[0-9]{2}/[0-9]{4}"
+- assertVisible: "(?s)[0-9]+ customers viewed this voucher"
+- assertVisible: "How to get voucher?"
+- takeScreenshot: home-voucher-details-top
+# Partner, terms and related offers sections
+- scrollUntilVisible:
+    element:
+      text: "About the partner"
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Terms & Conditions"
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "You may also like"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: home-voucher-details-lower
+- scrollUntilVisible:
+    element:
+      text: "(?s).*customers viewed this voucher.*"
+    direction: UP
+    timeout: 20000

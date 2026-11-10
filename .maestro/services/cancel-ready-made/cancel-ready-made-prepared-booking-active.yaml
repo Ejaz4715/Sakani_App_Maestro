@@ -1,0 +1,24 @@
+# SAKANI-51392-TC-001: the prepared account is Eligible and holds the EXACT Active Ready Made booking.
+# Suite: cancel-ready-made. Read-only (login, Account, My bookings -> Active). Nothing is tapped on the booking.
+appId: fi.iwa.sakani
+name: SAKANI-51392-TC-001 Eligible account holds the prepared Active Ready Made booking
+tags:
+  - sakani-51392
+  - cancel-ready-made
+  - service
+  - functional
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1119880062" : String(NATIONAL_ID)}'
+  READY_MADE_PROJECT: '${typeof READY_MADE_PROJECT === "undefined" ? "Target Segment test 22" : String(READY_MADE_PROJECT)}'
+  BOOKING_UNIT_CODE: '${typeof BOOKING_UNIT_CODE === "undefined" ? "03-01-0030-190-113" : String(BOOKING_UNIT_CODE)}'
+---
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: subflows/verify-prepared-booking.yaml

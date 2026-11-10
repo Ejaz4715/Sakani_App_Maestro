@@ -1,0 +1,15 @@
+# Assert one reflected FA result value inside its own row.
+# Env: BELOW (row label), ABOVE (next label), EXPECTED (exact value text).
+appId: fi.iwa.sakani
+name: Assert one reflected Financial advisory value
+---
+- scrollUntilVisible:
+    element:
+      text: ${BELOW}
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- assertVisible:
+    text: ${EXPECTED}
+    below: ${BELOW}
+    above: ${ABOVE}

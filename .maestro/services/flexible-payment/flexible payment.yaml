@@ -1,0 +1,145 @@
+# SAKANI-50700: hidden SAPA schedule offered for its prepared booking after Cash (English UI)
+# Needs the prepared Active booking; never books. Stops before Save and continue. Opt-in only
+appId: fi.iwa.sakani
+name: Flexible payment - hidden payment schedule offered for its specific booking after Cash
+tags:
+  - flexible-payment
+  - sakani-50700
+  - service
+  - functional
+  - health-check
+  # Dedicated data (1119880044 booking 01-01-0504-999-147 + SAPA schedule) - opt-in only
+  - needs-flexible-payment-booking
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1119880044" : String(NATIONAL_ID)}'
+  # Booking card name of the prepared booking's project (card: "مشروع  مساكن طيبة المدائن")
+  PROJECT_NAME: '${typeof PROJECT_NAME === "undefined" ? "مساكن طيبة المدائن" : String(PROJECT_NAME)}'
+  # Strongest identifier of the prepared booking
+  BOOKING_UNIT_CODE: '${typeof BOOKING_UNIT_CODE === "undefined" ? "01-01-0504-999-147" : String(BOOKING_UNIT_CODE)}'
+  PAYMENT_METHOD: '${typeof PAYMENT_METHOD === "undefined" ? "Cash" : String(PAYMENT_METHOD)}'
+  # Exact schedule title as shown in the English app UI (whitespace differences only) and its payments
+  EXPECTED_PLAN: '${typeof EXPECTED_PLAN === "undefined" ? "Hidden plan (Specific + Completion)" : String(EXPECTED_PLAN)}'
+  EXPECTED_PAYMENTS: '${typeof EXPECTED_PAYMENTS === "undefined" ? "5" : String(EXPECTED_PAYMENTS)}'
+---
+- assertTrue:
+    condition: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID))}
+    label: "FAIL - NATIONAL_ID is not a 10-digit ID"
+- assertTrue:
+    condition: ${/^[0-9]+$/.test(String(EXPECTED_PAYMENTS))}
+    label: "FAIL - EXPECTED_PAYMENTS is not a number"
+# Exact-title matcher: regex-escape the title, each run of spaces matches any whitespace
+- evalScript: '${output.titleRx = String(EXPECTED_PLAN).trim().replace(/[.*+?^()|\[\]\\{}]/g, function (c) { return "\\" + c; }).replace(/\s+/g, "\\s*")}'
+# Card text (live): "<title>\n5 payments\nUnit Price\n..." - title node first, count on the same card
+- evalScript: '${output.titleOnlyRx = "(?s)\\s*" + output.titleRx + "\\s*\\n.*"}'
+- evalScript: '${output.cardRx = "(?s)\\s*" + output.titleRx + "\\s*\\n" + String(EXPECTED_PAYMENTS) + "\\s+payments?\\n.*"}'
+- evalScript: "${console.log('FLEXIBLE PAYMENT - NATIONAL_ID [' + NATIONAL_ID + '] booking [' + BOOKING_UNIT_CODE + '] expected schedule [' + EXPECTED_PLAN + '] payments [' + EXPECTED_PAYMENTS + ']')}"
+
+# 1. Login and prove the account
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- runFlow:
+    file: ../../subflows/verify-signed-in-account.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- assertTrue:
+    condition: ${output.loginNationalId === String(NATIONAL_ID) && output.profileNationalId === String(NATIONAL_ID)}
+    label: "FAIL - signed-in account is not ${NATIONAL_ID}"
+
+# 2. My bookings -> Active (only the Active tab counts; the All tab can lag)
+- tapOn: "My bookings"
+- extendedWaitUntil:
+    visible: 'Active\s*Tab 2 of 4'
+    timeout: 45000
+- tapOn: 'Active\s*Tab 2 of 4'
+- extendedWaitUntil:
+    visible: "(?s).*(\nActive\n.*Unit code|don.t have any active booking).*"
+    timeout: 60000
+
+# 3. The exact prepared booking: Active + project + unit code
+- scrollUntilVisible:
+    element:
+      text: "(?s).*${PROJECT_NAME}.*\nActive\n.*\nUnit code\n${BOOKING_UNIT_CODE}\n.*"
+    direction: DOWN
+    timeout: 30000
+    label: "BLOCKED - TEST DATA - the prepared booking ${BOOKING_UNIT_CODE} is not Active for ${NATIONAL_ID}"
+- copyTextFrom:
+    text: "(?s).*${PROJECT_NAME}.*\nActive\n.*\nUnit code\n${BOOKING_UNIT_CODE}\n.*"
+- evalScript: "${console.log('FLEXIBLE PAYMENT - Active card [' + String(maestro.copiedText).replace(/\\n/g, ' | ') + ']')}"
+- takeScreenshot: flexible-payment-01-prepared-booking-active
+- tapOn:
+    text: "(?s).*${PROJECT_NAME}.*\nActive\n.*\nUnit code\n${BOOKING_UNIT_CODE}\n.*"
+    retryTapIfNoChange: false
+
+# 4. Booking Details of the prepared booking
+- extendedWaitUntil:
+    visible: 'Booking Details\s*Tab 1 of 2'
+    timeout: 45000
+- assertVisible: "(?s).*${PROJECT_NAME}.*"
+- extendedWaitUntil:
+    visible: "Payment Details"
+    timeout: 30000
+- takeScreenshot: flexible-payment-02-booking-details
+
+# 5. Payment method step: the Booking Details CTA below "Sign contract"
+- scrollUntilVisible:
+    element:
+      text: "Select payment method"
+      below: "Sign contract"
+    direction: UP
+    timeout: 30000
+- tapOn:
+    text: "Select payment method"
+    below: "Sign contract"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Finalize sales contract"
+    timeout: 45000
+- assertVisible: "Step 1 of 2"
+- assertVisible: "(?s)${PAYMENT_METHOD}\n.*"
+- takeScreenshot: flexible-payment-03-payment-method-screen
+
+# 6. Select Cash (no selected state: the revealed schedule section is the proof)
+# Save and continue persists the method: NEVER tapped
+- tapOn:
+    text: "(?s)${PAYMENT_METHOD}\n.*"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Select payment schedule"
+    timeout: 30000
+    label: "PAYMENT - no payment schedule section after selecting ${PAYMENT_METHOD}"
+- takeScreenshot: flexible-payment-04-cash-selected
+- evalScript: "${console.log('FLEXIBLE PAYMENT - ' + PAYMENT_METHOD + ' selected; schedule section shown')}"
+
+# 7. The configured hidden schedule is offered for this booking: its exact English title
+#    (whitespace-flexible), on a card that also shows EXPECTED_PAYMENTS payments
+- scrollUntilVisible:
+    element:
+      text: ${output.titleOnlyRx}
+    direction: DOWN
+    timeout: 180000
+    optional: true
+- runFlow:
+    when:
+      notVisible: ${output.titleOnlyRx}
+    commands:
+      - takeScreenshot: flexible-payment-05-PLAN-NOT-FOUND
+- assertVisible:
+    text: ${output.titleOnlyRx}
+    label: "PLAN - expected schedule '${EXPECTED_PLAN}' is not offered after selecting ${PAYMENT_METHOD} for booking ${BOOKING_UNIT_CODE}"
+- assertVisible:
+    text: ${output.cardRx}
+    label: "PLAN - schedule '${EXPECTED_PLAN}' does not show ${EXPECTED_PAYMENTS} payments"
+- copyTextFrom: ${output.cardRx}
+- evalScript: "${console.log('FLEXIBLE PAYMENT - schedule card shown [' + String(maestro.copiedText).replace(/\\n/g, ' | ').slice(0, 200) + ']')}"
+- takeScreenshot: flexible-payment-05-hidden-plan-offered
+# Safe end point: schedule list validated; "Save and continue" is not tapped (nothing persisted)
+- assertVisible: "Save and continue"
+- evalScript: "${console.log('FLEXIBLE PAYMENT SAFE END POINT - stopped before Save and continue (nothing persisted)')}"

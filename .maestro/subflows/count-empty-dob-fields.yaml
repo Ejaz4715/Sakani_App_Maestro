@@ -1,0 +1,13 @@
+# Count empty person-DOB inputs (hint "Enter DOB") into output.dobEmptyNow.
+appId: fi.iwa.sakani
+name: Count empty person-DOB fields
+---
+- evalScript: ${output.dobEmptyNow = 0}
+- repeat:
+    times: 8
+    while:
+      visible:
+        text: "Enter DOB"
+        index: ${output.dobEmptyNow}
+    commands:
+      - evalScript: ${output.dobEmptyNow = output.dobEmptyNow + 1}

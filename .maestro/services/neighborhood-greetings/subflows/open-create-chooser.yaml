@@ -1,0 +1,17 @@
+# Helper: open the create chooser from the main screen
+# Workaround: a one-time coach-mark swallows the first FAB tap, so tap until open
+appId: fi.iwa.sakani
+name: Open the Seventh Neighbor create chooser
+---
+- repeat:
+    times: 4
+    while:
+      notVisible: "Create Greetings"
+    commands:
+      - tapOn:
+          point: "89%,93%"
+      - waitForAnimationToEnd:
+          timeout: 5000
+
+- assertVisible: "Create Greetings"
+- assertVisible: "Create Event"

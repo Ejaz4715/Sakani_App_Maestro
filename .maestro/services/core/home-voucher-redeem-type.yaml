@@ -1,0 +1,39 @@
+# Home Vouchers: QR / Redeem now voucher opens its details from Home
+appId: fi.iwa.sakani
+name: Home QR-type voucher opens its own details and offers Redeem now (not tapped)
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+  HOME_VOUCHER_TITLE: '${typeof HOME_VOUCHER_TITLE === "undefined" ? "اسم الشركة باللغة العربية فقط QR" : String(HOME_VOUCHER_TITLE)}'
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: subflows/open-home-voucher.yaml
+    env:
+      HOME_VOUCHER_TITLE: ${HOME_VOUCHER_TITLE}
+- runFlow:
+    file: subflows/assert-voucher-details.yaml
+
+# Redeem now is offered but never tapped (may consume the voucher)
+- assertVisible: "Redeem now"
+- takeScreenshot: home-voucher-redeem-offered
+
+- back
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 15000
+- assertVisible: "Vouchers"
+- assertVisible:
+    text: ${"(?s).*% off.*" + HOME_VOUCHER_TITLE + ".*"}
+    below: "Vouchers"
+- assertNotVisible: "Redeem now"

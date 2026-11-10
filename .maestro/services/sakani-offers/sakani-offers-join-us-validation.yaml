@@ -1,0 +1,74 @@
+# TC-004: Join Us form validates mandatory fields before submission
+# Safety: never submits (would create a real partner request); leaves via Cancel
+appId: fi.iwa.sakani
+name: SAKANI-31966-TC-004 Join Us form validates mandatory fields before submission
+tags:
+  - sakani-31966
+  - sakani-offers
+  - service
+  - functional
+  - health-check
+env:
+  COMPANY_NAME: '${typeof COMPANY_NAME === "undefined" ? "Maestro QA Vendor" : COMPANY_NAME}'
+  BUSINESS_ACTIVITY: '${typeof BUSINESS_ACTIVITY === "undefined" ? "Home Services" : BUSINESS_ACTIVITY}'
+  CONTACT_MOBILE: '${typeof CONTACT_MOBILE === "undefined" ? "0555555555" : CONTACT_MOBILE}'
+---
+# Cold start (keeps the session), open Join as vendor
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-voucher-list.yaml
+- runFlow:
+    file: subflows/open-support-sheet.yaml
+
+- tapOn: "(?s)Join as vendor.*"
+- extendedWaitUntil:
+    visible: "Join as a Vendor"
+    timeout: 45000
+
+# Verify mandatory fields are marked
+- assertVisible: "(?s)Company Name \\*"
+- assertVisible: "(?s)Business Activity \\*"
+- assertVisible: "(?s)Contact Mobile \\*"
+# ...and optional ones are not
+- assertVisible: "Email"
+- assertVisible: "CR Number"
+
+# Tap Submit with mandatory fields empty: nothing is submitted
+- tapOn: "Submit"
+- waitForAnimationToEnd:
+    timeout: 8000
+- assertVisible: "Join as a Vendor"
+- assertNotVisible: "(?s).*(successfully|Thank you|request has been).*"
+- takeScreenshot: sakani-31966-tc-004-blocked-while-empty
+
+# Fill every mandatory field
+- tapOn: "e.g. myCompany"
+- inputText: ${COMPANY_NAME}
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- tapOn: "e.g. E-commerece"
+- inputText: ${BUSINESS_ACTIVITY}
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- tapOn: "e.g.055555555"
+- inputText: ${CONTACT_MOBILE}
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+
+- assertVisible: ${COMPANY_NAME}
+- assertVisible: ${BUSINESS_ACTIVITY}
+- assertVisible: ${CONTACT_MOBILE}
+
+# Enabled Submit sits beside Cancel; disabled one claims the full screen
+- assertVisible:
+    text: "Submit"
+    rightOf: "Cancel"
+- takeScreenshot: sakani-31966-tc-004-enabled-when-complete
+
+# Leave without submitting
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Sakani Voucher"
+    timeout: 45000
+- assertNotVisible: "Join as a Vendor"

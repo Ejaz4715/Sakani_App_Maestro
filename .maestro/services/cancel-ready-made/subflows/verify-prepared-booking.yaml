@@ -1,0 +1,42 @@
+# Helper (SAKANI-51392): from a signed-in session, prove the account and its prepared Ready Made
+# booking: identity, Eligible, and the EXACT Active card (project + unit code) in My bookings -> Active.
+# Read-only. Requires: NATIONAL_ID, READY_MADE_PROJECT, BOOKING_UNIT_CODE. Ends on the Active tab.
+appId: fi.iwa.sakani
+name: Verify the prepared Active Ready Made booking
+---
+- runFlow:
+    file: ../../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- runFlow:
+    file: ../../../subflows/verify-signed-in-account.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- assertTrue: ${output.loginNationalId === String(NATIONAL_ID) && output.profileNationalId === String(NATIONAL_ID)}
+- assertVisible:
+    text: 'Eligibility checker status\s+Eligible'
+    label: "PRECONDITION - the account is not Eligible"
+- takeScreenshot: sakani-51392-account-eligible
+
+# The prepared booking must still be Active (the All tab can lag, so only the Active tab counts)
+- tapOn: "My bookings"
+- extendedWaitUntil:
+    visible: 'Active\s*Tab 2 of 4'
+    timeout: 45000
+- tapOn: 'Active\s*Tab 2 of 4'
+- extendedWaitUntil:
+    visible: "(?s).*(\nActive\n.*Unit code|don.t have any active booking).*"
+    timeout: 60000
+- assertNotVisible:
+    text: "(?s).*don.t have any active booking.*"
+    label: "BLOCKED - TEST DATA - the prepared booking ${BOOKING_UNIT_CODE} is no longer Active (no Active booking)"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*${READY_MADE_PROJECT}(?![0-9]).*\nActive\n.*\nUnit code\n${BOOKING_UNIT_CODE}\n.*"
+    direction: DOWN
+    timeout: 30000
+    label: "BLOCKED - TEST DATA - the prepared booking ${BOOKING_UNIT_CODE} of ${READY_MADE_PROJECT} is not listed under Active"
+- copyTextFrom:
+    text: "(?s).*${READY_MADE_PROJECT}(?![0-9]).*\nActive\n.*\nUnit code\n${BOOKING_UNIT_CODE}\n.*"
+- evalScript: "${console.log('SAKANI-51392 PREPARED BOOKING - Active card [' + String(maestro.copiedText).replace(/\\n/g, ' | ') + ']')}"
+- takeScreenshot: sakani-51392-prepared-booking-active

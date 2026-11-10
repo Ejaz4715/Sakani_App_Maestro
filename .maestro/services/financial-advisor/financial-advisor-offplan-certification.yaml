@@ -1,0 +1,83 @@
+# SAKANI-23300-TC-002: Offplan completes via the certification path, reflected on profile.
+# Writes data: submits a real financial advisory.
+appId: fi.iwa.sakani
+name: SAKANI-23300-TC-002 Offplan completes via the certification path
+tags:
+  - sakani-23300
+  - financial-advisor
+  - service
+  - functional
+  - writes-data
+  - health-check
+env:
+  PRODUCT_TYPE: '${typeof PRODUCT_TYPE === "undefined" ? "Offplan" : String(PRODUCT_TYPE)}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : String(INCOME)}'
+  HOUSING_ALLOWANCE: '${typeof HOUSING_ALLOWANCE === "undefined" ? "2000" : String(HOUSING_ALLOWANCE)}'
+  OTHER_ALLOWANCES: '${typeof OTHER_ALLOWANCES === "undefined" ? "500" : String(OTHER_ALLOWANCES)}'
+  COMMITMENTS: '${typeof COMMITMENTS === "undefined" ? "1000" : String(COMMITMENTS)}'
+  COMMITMENT_MONTHS: '${typeof COMMITMENT_MONTHS === "undefined" ? "24" : String(COMMITMENT_MONTHS)}'
+  SAVINGS: '${typeof SAVINGS === "undefined" ? "50000" : String(SAVINGS)}'
+---
+# Cold start (session is kept)
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+
+- runFlow:
+    file: subflows/fill-fa-form.yaml
+    env:
+      PRODUCT_TYPE: ${PRODUCT_TYPE}
+      INCOME: ${INCOME}
+      HOUSING_ALLOWANCE: ${HOUSING_ALLOWANCE}
+      OTHER_ALLOWANCES: ${OTHER_ALLOWANCES}
+      COMMITMENTS: ${COMMITMENTS}
+      COMMITMENT_MONTHS: ${COMMITMENT_MONTHS}
+      SAVINGS: ${SAVINGS}
+
+- assertVisible: ${PRODUCT_TYPE}
+- takeScreenshot: sakani-23300-tc-002-offplan-selected
+
+# State-changing: submit the advisory
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+- assertVisible: "(?s)I certify that the.*"
+# Certification checkbox has no node: proven footer point, tapped once
+- tapOn:
+    point: "7%,82%"
+- waitForAnimationToEnd:
+    timeout: 2000
+# Submit - exactly one tap, never retried
+- tapOn:
+    text: "Submit"
+    retryTapIfNoChange: false
+
+# Verify certification success
+- extendedWaitUntil:
+    visible: "(?s)(Success!|We apologize)"
+    timeout: 90000
+- assertVisible: "Success!"
+# Certificate wording is the only UI proof of the certification path
+- assertVisible: "(?s).*financial certificate has been successfully issued.*"
+- assertVisible: "(?s).*visit your profile to check your financial certificate.*"
+# ...and not the recommendation wording (catches routing to GetRecommendation)
+- assertNotVisible: "(?s).*financial recommendation has been successfully issued.*"
+- takeScreenshot: sakani-23300-tc-002-offplan-success
+- tapOn: "(?s)(Done|Back)"
+
+# Verify result on the Financial advisory page
+- runFlow:
+    file: subflows/open-financial-advisory.yaml
+- extendedWaitUntil:
+    visible: "Purchasing power"
+    timeout: 45000
+- assertVisible: "(?s)[0-9]{2}/[0-9]{2}/[0-9]{4} at [0-9]{1,2}:[0-9]{1,2}"
+
+# Verify Offplan is recorded on the profile
+- scrollUntilVisible:
+    element:
+      text: "Product Type"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: ${PRODUCT_TYPE}
+- takeScreenshot: sakani-23300-tc-002-profile-reflection

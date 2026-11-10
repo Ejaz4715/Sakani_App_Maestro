@@ -1,0 +1,40 @@
+# Sign in via the Nafath happy path and land on an authenticated Home.
+# Requires: NATIONAL_ID; app running and unauthenticated.
+appId: fi.iwa.sakani
+name: Login with National ID
+---
+# Safety guard: never type an unresolved or malformed ID (keep dollar-free)
+- assertTrue: ${typeof NATIONAL_ID !== "undefined" && String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+# Get to the guest Home
+- runFlow:
+    file: clear-overlays.yaml
+    env:
+      ANCHOR: "(?s).*Login / Sign up.*"
+
+- extendedWaitUntil:
+    visible: "(?s).*Login / Sign up.*"
+    timeout: 120000
+- tapOn: "(?s).*Login / Sign up.*"
+
+# Accepts "Nefath" and "Nafath" (known login copy issue)
+- extendedWaitUntil:
+    visible: "Continue with N[ae]fath"
+    timeout: 45000
+
+- tapOn: "Enter your ID, phone number,? or email"
+- inputText: ${NATIONAL_ID}
+- assertVisible: ${NATIONAL_ID}
+- tapOn: "Continue"
+
+# Safety: Nafath screen must show exactly the requested ID before Confirm
+- extendedWaitUntil:
+    visible: "Login with nafath"
+    timeout: 45000
+- assertVisible: ${NATIONAL_ID}
+# Record the proven ID for the journey identity gate
+- evalScript: ${output.loginNationalId = String(NATIONAL_ID)}
+- tapOn: "Confirm"
+
+# Post-Confirm states are handled by post-login.yaml
+- runFlow:
+    file: post-login.yaml

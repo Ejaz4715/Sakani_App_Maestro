@@ -1,0 +1,58 @@
+# SAKANI-23459-TC-005: AC1 negative - user without Eligibility is blocked and sent to it.
+# Writes data: may raise a REAL VAT request; approval and a no-Eligibility account only
+appId: fi.iwa.sakani
+name: SAKANI-23459-TC-005 Submit request with not eligible user
+tags:
+  - sakani-23459
+  - real-estate-tax
+  - needs-ineligible-account
+  # Runner refuses this without --yes-i-understand-this-changes-business-data
+  - writes-data
+  - service
+  - functional
+  - health-check
+---
+# Cold start (session is kept)
+- stopApp
+- launchApp
+
+# Precondition guard: account must NOT be Eligible
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: ../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Account\s*Tab 4 of 4'
+      DESTINATION: '(Profile details|Invoices)'
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Eligibility checker status.*"
+    direction: DOWN
+    timeout: 30000
+- assertNotVisible: "(?s).*Eligibility checker status\\s*Eligible.*"
+
+# State-changing: tap "Request a service" and verify the AC1 validation
+- runFlow:
+    file: subflows/open-vat-service.yaml
+- tapOn: "Request a service"
+
+- extendedWaitUntil:
+    visible: "Missing some information"
+    timeout: 45000
+- assertVisible: "(?s).*Please check your Eligibility status first.*"
+- assertVisible: "Check Eligibility"
+- takeScreenshot: sakani-23459-tc-005-eligibility-validation
+
+# Verify the VAT journey did not proceed
+- assertNotVisible: "First Home VAT Exemption"
+- assertNotVisible: "Certificate Issued successfully"
+
+# Verify the CTA routes to Eligibility
+- tapOn: "Check Eligibility"
+- extendedWaitUntil:
+    visible: "(?s)(Eligibility|Check your eligibility)"
+    timeout: 45000
+- assertVisible: "(?s).*[Ee]ligibility.*"
+- takeScreenshot: sakani-23459-tc-005-routed-to-eligibility

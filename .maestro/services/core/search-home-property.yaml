@@ -1,0 +1,69 @@
+# Home search: property search returns matching projects; result opens the project
+# Read-only: View units is not used
+appId: fi.iwa.sakani
+name: Home search - property term returns matching projects and opens the selected project
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+  SEARCH_PROPERTY_TERM: '${typeof SEARCH_PROPERTY_TERM === "undefined" ? "طيبة" : String(SEARCH_PROPERTY_TERM)}'
+  SEARCH_PROPERTY_RESULT: '${typeof SEARCH_PROPERTY_RESULT === "undefined" ? "مساكن طيبة المدائن EN" : String(SEARCH_PROPERTY_RESULT)}'
+---
+- assertTrue:
+    condition: ${SEARCH_PROPERTY_RESULT.indexOf(SEARCH_PROPERTY_TERM) >= 0}
+    label: "TEST DATA - SEARCH_PROPERTY_RESULT must contain SEARCH_PROPERTY_TERM"
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- runFlow:
+    file: subflows/open-home-search.yaml
+
+# Search
+- tapOn:
+    leftOf: "Cancel"
+- inputText: ${SEARCH_PROPERTY_TERM}
+- extendedWaitUntil:
+    visible: "Property"
+    timeout: 30000
+- runFlow:
+    file: ../../subflows/dismiss-keypad.yaml
+# Expected project listed under Property
+- assertVisible:
+    text: ${"(?s).*" + SEARCH_PROPERTY_RESULT + ".*"}
+    below: "Property"
+- takeScreenshot: search-property-results
+
+# Select the result - project opens
+- tapOn:
+    text: ${"(?s).*" + SEARCH_PROPERTY_RESULT + ".*"}
+    below: "Property"
+# Dismiss compare coach sheet if shown
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "About this project"
+- assertVisible:
+    text: ${"(?s).*" + SEARCH_PROPERTY_RESULT + ".*"}
+    above: "About this project"
+- takeScreenshot: search-property-destination
+
+# Back keeps the search; Cancel returns to Home
+- back
+- extendedWaitUntil:
+    visible: "Cancel"
+    timeout: 15000
+- assertVisible:
+    text: ${"(?s).*" + SEARCH_PROPERTY_RESULT + ".*"}
+    below: "Property"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 15000
+- assertNotVisible: "Cancel"

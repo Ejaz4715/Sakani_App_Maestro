@@ -1,0 +1,106 @@
+# SRCH-003 / 002 / 008 - Explore location search (no auth required)
+# Asserted on the search surface only, so defect D-24 cannot mask results
+appId: fi.iwa.sakani
+name: SRCH-003 no-results empty state, SRCH-002 grouped autocomplete, SRCH-008 recent searches
+tags:
+  - health-check
+---
+- stopApp
+# Restart so the flow starts from the app entry (session kept)
+- launchApp
+
+# Clear launch popups until the tab bar is reachable
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Explore\s*Tab 2 of 4'
+# Open Explore (handles NPS survey)
+- runFlow:
+    file: ../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Explore\s*Tab 2 of 4'
+      DESTINATION: "Registered Interests"
+
+# Wait for the Explore header before tapping into it
+- extendedWaitUntil:
+    visible: "Registered Interests"
+    timeout: 45000
+
+# Location field has no node: coordinate tap; clear Select category sheet if shown
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Select category"
+          commands:
+            - tapOn: "Cancel"
+            - waitForAnimationToEnd:
+                timeout: 5000
+      - runFlow:
+          when:
+            notVisible: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+          commands:
+            - tapOn:
+                point: "55%,11%"
+            - waitForAnimationToEnd:
+                timeout: 8000
+
+# Arrival proven by the search sheet input
+- extendedWaitUntil:
+    visible: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+    timeout: 30000
+
+- tapOn: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+- inputText: "zzzqqqxyz"
+
+# SRCH-003: no-results empty state
+- extendedWaitUntil:
+    visible: "No results were found for your search."
+    timeout: 30000
+- assertVisible: "Please try refining your search or explore nearby properties."
+
+# SRCH-004: Cancel returns to Explore
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: 'Explore\s*Tab 2 of 4'
+    timeout: 30000
+# Search sheet is closed
+- assertNotVisible: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+
+# SRCH-002: partial term returns grouped autocomplete results
+- tapOn:
+    point: "55%,11%"
+- extendedWaitUntil:
+    visible: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+    timeout: 30000
+- tapOn: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+- inputText: "Riy"
+
+# Wait for Show more results
+- extendedWaitUntil:
+    visible: "Show more results"
+    timeout: 30000
+
+# At least one result group (groups are live index data)
+- assertVisible: "(Location|Property|Developer|Project)"
+
+# Relevance: a result extends the typed term
+- assertVisible: "(?s).*Riy[A-Za-z]+.*"
+
+# Property-type labels not asserted (known defect D-06, owned by SRCH-005)
+
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: 'Explore\s*Tab 2 of 4'
+    timeout: 30000
+
+# SRCH-008: earlier searches of this run are listed on reopen
+- tapOn:
+    point: "55%,11%"
+- extendedWaitUntil:
+    visible: "Recent searches"
+    timeout: 30000
+- assertVisible: "zzzqqqxyz"
+- assertVisible: "Riy"
+

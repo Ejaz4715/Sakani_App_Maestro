@@ -1,0 +1,680 @@
+# DESTRUCTIVE: creates ONE real booking and PAYS its fee with the PRE mada TEST card.
+# Payment only with PAYMENT_APPROVED=true (else stops before Pay booking fee); never re-run after Pay now.
+appId: fi.iwa.sakani
+name: Full Journey - paid booking fee
+tags:
+  - critical
+  - release-readiness
+env:
+  # Required at runtime (no default account): --env NATIONAL_ID=<10-digit ID>
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "" : String(NATIONAL_ID)}'
+  PROJECT: '${typeof PROJECT === "undefined" ? "مساكن طيبة المدائن EN" : String(PROJECT)}'
+  PROJECT_SEARCH: '${typeof PROJECT_SEARCH === "undefined" ? "طيبة" : String(PROJECT_SEARCH)}'
+  MODULE: '${typeof MODULE === "undefined" ? "Apartment" : String(MODULE)}'
+  # Approved PRE TEST card only; never log number or CVV (masked form only)
+  PAYMENT_CARD_SCHEME: '${typeof PAYMENT_CARD_SCHEME === "undefined" ? "mada" : String(PAYMENT_CARD_SCHEME)}'
+  PAYMENT_CARD_NUMBER: '${typeof PAYMENT_CARD_NUMBER === "undefined" ? "4464040000000007" : String(PAYMENT_CARD_NUMBER)}'
+  # MM/YY; only the four digits are typed
+  PAYMENT_CARD_EXPIRY: '${typeof PAYMENT_CARD_EXPIRY === "undefined" ? "10/52" : String(PAYMENT_CARD_EXPIRY)}'
+  PAYMENT_CARD_CVV: '${typeof PAYMENT_CARD_CVV === "undefined" ? "222" : String(PAYMENT_CARD_CVV)}'
+  # Card Holder is required by the gateway; test holder text, not card data
+  PAYMENT_CARD_HOLDER: '${typeof PAYMENT_CARD_HOLDER === "undefined" ? "TEST USER" : String(PAYMENT_CARD_HOLDER)}'
+  # Payment needs explicit approval for this run: -e PAYMENT_APPROVED=true
+  PAYMENT_APPROVED: '${typeof PAYMENT_APPROVED === "undefined" ? "false" : String(PAYMENT_APPROVED)}'
+  # Optional: unit cards never selected, e.g. "999-389,999-182" (empty = first available card)
+  SKIP_UNIT: '${typeof SKIP_UNIT === "undefined" ? "" : String(SKIP_UNIT)}'
+---
+- evalScript: ${console.log('FULL JOURNEY TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+# Validate payment variables first; only the masked card is logged
+- evalScript: ${output.cardExpiryDigits = String(PAYMENT_CARD_EXPIRY).replace(/[^0-9]/g, '')}
+- evalScript: ${output.cardMasked = String(PAYMENT_CARD_SCHEME) + ' ****' + String(PAYMENT_CARD_NUMBER).slice(-4)}
+- assertTrue:
+    # Keep dollar-free (Maestro 2.9.0 skips expressions with a second dollar sign)
+    condition: ${String(PAYMENT_CARD_NUMBER).length >= 12 && !/[^0-9]/.test(String(PAYMENT_CARD_NUMBER)) && output.cardExpiryDigits.length === 4 && String(PAYMENT_CARD_CVV).length >= 3 && String(PAYMENT_CARD_CVV).length <= 4 && !/[^0-9]/.test(String(PAYMENT_CARD_CVV))}
+    label: "PAYMENT DATA - PAYMENT_CARD_NUMBER / PAYMENT_CARD_EXPIRY / PAYMENT_CARD_CVV are missing or malformed"
+- evalScript: "${console.log('PAYMENT CARD - ' + output.cardMasked + ' (test card)')}"
+- assertTrue:
+    condition: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+    label: "FAIL - NATIONAL_ID is required (--env NATIONAL_ID=<10-digit National ID / Iqama>) - nothing started"
+
+# Login with test account
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# Safety gate: profile National ID must match NATIONAL_ID before reserving or paying
+- runFlow:
+    file: ../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- runFlow:
+    file: ../subflows/verify-signed-in-account.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- assertTrue:
+    condition: ${output.loginNationalId === String(NATIONAL_ID) && output.profileNationalId === String(NATIONAL_ID)}
+    label: "SAFETY GATE - signed-in account is not ${NATIONAL_ID} - nothing reserved or paid"
+
+# Safety gate: Active booking must be empty before starting the paid journey
+- tapOn: "My bookings"
+- extendedWaitUntil:
+    visible: 'Active\s*Tab 2 of 4'
+    timeout: 45000
+- tapOn: 'Active\s*Tab 2 of 4'
+- extendedWaitUntil:
+    visible: "(?s).*(\nActive\n.*Unit code|don.t have any active booking).*"
+    timeout: 60000
+- takeScreenshot: journey-1-active-bookings-precheck
+- assertVisible:
+    text: "(?s).*don.t have any active booking.*"
+    label: "BLOCKED - TEST DATA: ACTIVE BOOKING EXISTS for ${NATIONAL_ID} - nothing reserved or paid"
+- evalScript: ${output.noActiveBookingProven = true}
+- back
+- extendedWaitUntil:
+    visible: 'Explore\s*Tab 2 of 4'
+    timeout: 20000
+
+- tapOn: 'Explore\s*Tab 2 of 4'
+- runFlow:
+    file: ../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "Registered Interests"
+
+# Construction-status chip in the Explore header (live: accessibilityText "Offplan", right of "Registered Interests")
+- tapOn:
+    text: "Offplan"
+    rightOf: "Registered Interests"
+- waitForAnimationToEnd:
+    timeout: 8000
+
+# Filter sheet: only the validated "Start searching" variant; anything else fails here
+- extendedWaitUntil:
+    visible: "Start searching"
+    timeout: 15000
+    label: "FILTER - the 'Start searching' filter sheet did not open"
+- tapOn: "Buy"
+- assertVisible: "Offplan"
+- tapOn: "Offplan"
+- tapOn: "Start searching"
+
+- waitForAnimationToEnd:
+    timeout: 20000
+
+- extendedWaitUntil:
+    visible: "Offplan"
+    timeout: 45000
+# Results or saved-location empty state; the PROJECT search below replaces any saved location
+- runFlow:
+    file: ../subflows/explore-results-or-empty.yaml
+# Filter state proof: header chips read Buy + Offplan
+- assertVisible:
+    text: "Buy"
+    above: "Registered Interests"
+    label: "FILTER - Explore header does not show Buy after the filter sheet"
+- assertVisible:
+    text: "Offplan"
+    rightOf: "Registered Interests"
+    label: "FILTER - Explore header does not show Offplan after the filter sheet"
+- takeScreenshot: journey-2-marketplace
+# Open search sheet: fast path, guarded fallback loop; arrival = search input + Cancel
+- evalScript: ${output.searchSheetOpen = false}
+- runFlow:
+    optional: true
+    commands:
+      - tapOn:
+          point: "55%,11%"
+      - extendedWaitUntil:
+          visible:
+            text: "Cancel"
+            rightOf: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+          timeout: 10000
+      - evalScript: ${output.searchSheetOpen = true}
+- runFlow:
+    when:
+      true: ${output.searchSheetOpen !== true}
+    commands:
+      - repeat:
+          times: 3
+          commands:
+            - runFlow:
+                when:
+                  notVisible:
+                    text: "Cancel"
+                    rightOf: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+                commands:
+                  - tapOn:
+                      point: "55%,11%"
+                  - waitForAnimationToEnd:
+                      timeout: 8000
+- extendedWaitUntil:
+    visible:
+      text: "Cancel"
+      rightOf: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+    timeout: 10000
+    label: "SEARCH - search sheet did not open"
+- tapOn: "Enter Region, City, Neighborhood, Street, Project, Developer, Building Number, Block Number"
+- inputText: ${PROJECT_SEARCH}
+
+# Search project; tap the full name under the "Property" group only
+- extendedWaitUntil:
+    visible: "Property"
+    timeout: 30000
+- takeScreenshot: journey-2-search-results
+# Exact identity: whole result text = PROJECT (whitespace-flexible), optionally after the app's "مشروع" prefix
+- evalScript: '${output.projectRx = "(?:مشروع\\s+)?" + String(PROJECT).trim().replace(/[.*+?^()|\[\]\\{}]/g, function (c) { return "\\" + c; }).replace(/\s+/g, "\\s+")}'
+- tapOn:
+    text: ${output.projectRx}
+    below:
+      text: "Property"
+
+# Close one-off coach mark with Back, never its CTA
+- runFlow:
+    file: ../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "About this project"
+
+# Verify Project Details of a bookable Offplan project
+- extendedWaitUntil:
+    visible: "View units"
+    timeout: 45000
+- assertVisible: "About this project"
+- assertVisible: "Bookings open"
+- assertVisible: "(?s).*available units.*"
+
+# Project type must be Offplan ("Units under construction")
+- scrollUntilVisible:
+    element:
+      text: "Project type"
+    direction: DOWN
+    timeout: 45000
+- assertVisible: "Units under construction"
+- runFlow:
+    when:
+      visible: "Target audience"
+    commands:
+      - assertVisible: "For all"
+
+- assertVisible: "Payment methods"
+- assertVisible: "Cash"
+
+# Select module, then a unit
+
+- tapOn: "View units"
+- extendedWaitUntil:
+    visible: "(?s).*Unit list.*"
+    timeout: 45000
+- runFlow:
+    when:
+      visible: "Property type"
+    commands:
+      - tapOn: "Property type"
+      - extendedWaitUntil:
+          visible: "Apply"
+          timeout: 20000
+      - assertVisible: ${MODULE}
+      - tapOn: ${MODULE}
+      - tapOn: "Apply"
+      - extendedWaitUntil:
+          visible: "(?s).*Unit list.*"
+          timeout: 45000
+
+- assertNotVisible: "Scrim"
+
+- extendedWaitUntil:
+    visible: "(?s).*(Available|matched).*"
+    timeout: 45000
+- tapOn: "(?s).*${MODULE}s? (Available|matched).*"
+
+- extendedWaitUntil:
+    visible: "Eligibility type"
+    timeout: 45000
+- assertVisible: "(?s).*Prices.*"
+
+# Record selected unit card for the same-booking proof; SKIP_UNIT is excluded (dollar-free checks)
+- assertTrue:
+    condition: ${String(SKIP_UNIT).length === 0 || !/[^0-9A-Za-z,-]/.test(String(SKIP_UNIT))}
+    label: "FAIL - SKIP_UNIT must look like 999-389 or 999-389,999-182"
+- evalScript: '${output.unitCardRx = "(?s)" + MODULE + " " + (String(SKIP_UNIT).length > 0 ? "(?!(?:" + String(SKIP_UNIT).split(",").join("|") + ")\\n)" : "") + "[0-9A-Za-z-]+\\n.*"}'
+- copyTextFrom:
+    text: ${output.unitCardRx}
+    index: 0
+- evalScript: ${output.selectedUnitCard = String(maestro.copiedText)}
+- evalScript: "${console.log('UNIT SELECTED - card [' + output.selectedUnitCard.replace(/\\n/g, ' | ') + '] (skip [' + SKIP_UNIT + '])')}"
+# Selected unit name (card's first line) as a complete-line matcher for later same-unit proofs
+- evalScript: ${output.selectedUnitName = output.selectedUnitCard.split('\n')[0].trim()}
+- evalScript: '${output.selectedUnitLineRx = "(?s)(?:.*\\n)?(?:[^\\n]*[ ,])?" + output.selectedUnitName.replace(/[.*+?^()|\[\]\\{}]/g, function (c) { return "\\" + c; }) + "(?:\\n.*)?"}'
+- tapOn:
+    text: ${output.unitCardRx}
+    index: 0
+
+# Verify Unit Details is reservable
+- extendedWaitUntil:
+    visible: "Mortgage Calculator"
+    timeout: 45000
+- assertVisible:
+    text: ${output.selectedUnitLineRx}
+    label: "UNIT DETAILS - the opened unit is not the selected card (${output.selectedUnitName})"
+- assertVisible: "(?s).*Unit Price.*"
+- assertVisible: "Reserve unit"
+- takeScreenshot: journey-3-unit-details
+
+# State-changing: Reserve unit tapped ONCE (temporary reservation); never retried
+- evalScript: "${console.log('RESERVE - reserving [' + output.selectedUnitName + ']')}"
+- tapOn:
+    text: "Reserve unit"
+    retryTapIfNoChange: false
+
+# Blockers ("Active contract detected", "Active booking detected") fail with nothing replaced
+# Old pending hold ("reserving another unit"): approved Yes ONCE, only after the no-Active-booking proof
+- extendedWaitUntil:
+    visible: "(?s)(Booking summary|You are reserving another unit.*|.*Active contract detected.*|.*Active booking detected.*)"
+    timeout: 45000
+    label: "RESERVE - unknown screen after Reserve unit (no Booking summary, pending-hold dialog or known blocker) - nothing else tapped"
+- runFlow:
+    when:
+      visible: "(?s).*Active booking detected.*"
+    commands:
+      - takeScreenshot: journey-4-BLOCKED-active-booking
+      - assertNotVisible:
+          text: "(?s).*Active booking detected.*"
+          label: "BLOCKED - TEST DATA: ACTIVE BOOKING EXISTS (reported after Reserve unit) - nothing cancelled or replaced"
+- runFlow:
+    when:
+      visible: "(?s).*Active contract detected.*"
+    commands:
+      - takeScreenshot: journey-4-BLOCKED-active-contract
+      - assertNotVisible:
+          text: "(?s).*Active contract detected.*"
+          label: "BLOCKED - the account has an active subsidy contract (Active contract detected!) - no booking attempted, needs PRE backend cleanup"
+- extendedWaitUntil:
+    visible: "(?s)(Booking summary|You are reserving another unit.*)"
+    timeout: 45000
+    label: "RESERVE - unknown screen after Reserve unit - nothing else tapped"
+- runFlow:
+    when:
+      visible: "(?s)You are reserving another unit.*"
+    commands:
+      - takeScreenshot: journey-4-pending-hold-dialog
+      - assertTrue:
+          condition: ${output.noActiveBookingProven === true}
+          label: "BLOCKED - TEST DATA: EXISTING/PENDING BOOKING - no proof of an empty Active tab in this run; Yes NOT tapped"
+      - assertVisible: "Are you sure?"
+      - evalScript: "${console.log('PENDING HOLD - no Active booking exists; approved to discard old temporary reservation')}"
+      # Discards the old temporary hold: tapped ONCE, never retried
+      - tapOn:
+          text: "^Yes$"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          notVisible: "Are you sure?"
+          timeout: 15000
+          label: "RESERVE - pending-hold dialog did not close after Yes (Yes NOT retried)"
+
+- extendedWaitUntil:
+    visible: "Booking summary"
+    timeout: 45000
+    label: "RESERVE - Booking summary did not open"
+- assertVisible: "Please check your reservation details below and click Confirm booking."
+# Same-unit proof at arrival (independent of the fee): the summary is for the selected unit
+- assertVisible:
+    text: ${output.selectedUnitLineRx}
+    label: "BOOKING SUMMARY - not for the selected unit (${output.selectedUnitName})"
+- extendedWaitUntil:
+    visible: "Booking Details"
+    timeout: 30000
+
+- scrollUntilVisible:
+    element:
+      text: "Project Type"
+    direction: DOWN
+    timeout: 30000
+
+# Second Offplan gate before commit ("Off-plan" on this screen)
+- assertVisible: "Project Type"
+- assertVisible: "(?s).*Off-?plan.*"
+
+- scrollUntilVisible:
+    element:
+      text: "Booking Fee"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Booking Fee"
+- takeScreenshot: journey-4-booking-summary
+
+# Stop point: paid path only; fee of 0 fails before commit (no fallback to zero-fee path)
+- assertVisible: "Unit booking"
+# Fee read anchored on the summary's own controls (the disclaimer can be absent)
+- copyTextFrom:
+    text: '[0-9][0-9,]*(\.[0-9]+)?'
+    below: "Booking Fee"
+    above: "(Booking disclaimer|Pay booking fee|Confirm booking)"
+- evalScript: ${output.bookingFee = Number(String(maestro.copiedText).replace(/[^0-9.]/g, ""))}
+- evalScript: "${console.log('BOOKING SUMMARY - Booking Fee rendered as [' + maestro.copiedText + '] = ' + output.bookingFee)}"
+- assertTrue:
+    condition: ${output.bookingFee > 0}
+    label: "PAID JOURNEY - Booking Fee is zero; paid test data is not active"
+- assertNotVisible:
+    text: "Confirm booking"
+    label: "TEST DATA - summary offers Confirm booking (zero-fee path): unit unsuitable for the PAID journey"
+- assertVisible:
+    text: "Pay booking fee"
+    label: "PRECONDITION - paid summary must expose Pay booking fee"
+
+# Record block and unit number; summary must match the selected card
+- copyTextFrom:
+    text: '[0-9]+'
+    below: "Block"
+- evalScript: ${output.unitBlock = String(maestro.copiedText)}
+- copyTextFrom:
+    text: '[0-9]+'
+    below:
+      text: "${MODULE}"
+      index: 0
+- evalScript: ${output.unitNumber = String(maestro.copiedText)}
+- evalScript: "${console.log('PAID UNIT - card [' + String(output.selectedUnitCard).replace(/\\n/g, ' | ') + '] block [' + output.unitBlock + '] ' + MODULE + ' [' + output.unitNumber + '] fee [' + output.bookingFee + ']')}"
+- assertTrue:
+    condition: ${output.selectedUnitName === MODULE + ' ' + output.unitBlock + '-' + output.unitNumber}
+    label: "PRECONDITION - booking summary is not for the selected unit card"
+
+# Safe end point: payment not approved - stop with Pay booking fee visible, nothing paid
+- runFlow:
+    when:
+      true: ${PAYMENT_APPROVED !== "true"}
+    commands:
+      - assertVisible: "Pay booking fee"
+      - takeScreenshot: journey-paid-SAFE-END-before-pay-booking-fee
+      - evalScript: "${console.log('FULL JOURNEY PAID SAFE END POINT - stopped before Pay booking fee (PAYMENT_APPROVED is not true): fee [' + output.bookingFee + '], block [' + output.unitBlock + '], unit [' + output.unitNumber + '] - nothing paid')}"
+
+- runFlow:
+    when:
+      true: ${PAYMENT_APPROVED === "true"}
+    commands:
+      # Approved payment path only: acknowledge the Booking disclaimer, then pay
+      - scrollUntilVisible:
+          element:
+            text: "I have read and understood the Booking disclaimer"
+          direction: DOWN
+          timeout: 30000
+      - assertVisible: "Booking disclaimer"
+      - assertVisible: "I have read and understood the Booking disclaimer"
+      - waitForAnimationToEnd:
+          timeout: 5000
+
+      # Disclaimer checkbox has no semantic state: proven by pixels; tap only if not ticked
+      # Not ticked -> stops before any payment step
+      - evalScript: ${output.disclaimerTicked = false}
+      - runFlow:
+          optional: true
+          commands:
+            - assertScreenshot:
+                path: ../reference-screenshots/booking/disclaimer-ticked.png
+                cropOn:
+                  leftOf: "I have read and understood the Booking disclaimer"
+                  below: "Read all"
+                  above: "Pay booking fee"
+                thresholdPercentage: 95
+            - evalScript: ${output.disclaimerTicked = true}
+      - runFlow:
+          when:
+            true: ${output.disclaimerTicked !== true}
+          commands:
+            - evalScript: "${console.log('DISCLAIMER - checkbox does not match the ticked reference; ticking it once')}"
+            - tapOn:
+                leftOf: "I have read and understood the Booking disclaimer"
+                below: "Read all"
+                above: "Pay booking fee"
+                retryTapIfNoChange: false
+            - waitForAnimationToEnd:
+                timeout: 5000
+      - assertScreenshot:
+          path: ../reference-screenshots/booking/disclaimer-ticked.png
+          cropOn:
+            leftOf: "I have read and understood the Booking disclaimer"
+            below: "Read all"
+            above: "Pay booking fee"
+          thresholdPercentage: 95
+          label: "DISCLAIMER - the Booking disclaimer checkbox is not ticked"
+      - evalScript: "${console.log('DISCLAIMER - acknowledgement proven by the ticked checkbox pixels (already ticked on arrival=' + output.disclaimerTicked + ')')}"
+      - takeScreenshot: journey-paid-5-before-pay
+
+      # State-changing: tap Pay booking fee once; gateway opening is the proof
+      - tapOn:
+          text: "Pay booking fee"
+          retryTapIfNoChange: false
+      - assertNotVisible:
+          text: '(?s)(.*There.s something wrong.*|.*the service is down.*|Error!)'
+          label: "PAY - the product reported an error after Pay booking fee"
+
+      # Payment gateway (WebView): switch to English for stable selectors
+      - extendedWaitUntil:
+          visible: "Payment Gate"
+          timeout: 60000
+          label: "PAY - the payment gateway did not open after Pay booking fee"
+      - extendedWaitUntil:
+          visible: "(?s).*(Immediate Payment|الدفع اللحظي).*"
+          timeout: 90000
+      - runFlow:
+          when:
+            visible: "English"
+          commands:
+            - tapOn: "English"
+            - waitForAnimationToEnd:
+                timeout: 8000
+
+      - assertVisible: "Wanted Amount To Be Paid"
+      - assertVisible: "Payment Methods"
+      - takeScreenshot: journey-paid-6-gateway
+
+      # Mada: the test card BIN is a mada BIN
+      - tapOn: "Pay With Mada"
+
+      # Wait until form fields are ready; typing under the spinner fails silently
+      - extendedWaitUntil:
+          visible: 'Card Number ?\*'
+          timeout: 90000
+      - extendedWaitUntil:
+          visible: 'Card Holder ?\*'
+          timeout: 60000
+      - waitForAnimationToEnd:
+          timeout: 10000
+
+      # Fill card fields (cleared first); no screenshots or logs of card number/CVV
+      - tapOn:
+          below:
+            text: 'Card Number ?\*'
+      - eraseText:
+          charactersToErase: 30
+      - inputText: ${PAYMENT_CARD_NUMBER}
+      - hideKeyboard
+      - tapOn:
+          below:
+            text: 'Expiry Date ?\*'
+      - eraseText:
+          charactersToErase: 10
+      # Type MMYY digits only; the gateway adds its own separator
+      - inputText: ${output.cardExpiryDigits}
+      - hideKeyboard
+      - tapOn:
+          below:
+            text: 'Card Holder ?\*'
+      # CVV is typed only into the gateway CVV field and is never logged or captured in screenshots
+      - eraseText:
+          charactersToErase: 30
+      - inputText: ${PAYMENT_CARD_HOLDER}
+      - hideKeyboard
+
+      - scrollUntilVisible:
+          element:
+            text: 'CVV ?\*'
+          direction: DOWN
+          visibilityPercentage: 60
+          timeout: 30000
+      - tapOn:
+          below:
+            text: 'CVV ?\*'
+      - inputText: ${PAYMENT_CARD_CVV}
+      - hideKeyboard
+      - evalScript: "${console.log('PAYMENT - card fields filled with ' + output.cardMasked + ' (number/CVV not logged)')}"
+      - assertVisible: "Pay now"
+
+      # Payment safety gate: app ribbon must be visible on the gateway, else stop before paying
+      - evalScript: ${output.ribbonOnGateway = false}
+      - runFlow:
+          when:
+            visible: 'PRE-[0-9]+(\.[0-9]+)*-[0-9]+'
+          commands:
+            - evalScript: ${output.ribbonOnGateway = true}
+      - assertTrue:
+          condition: ${output.ribbonOnGateway === true}
+          label: "PAY SAFETY - the app ribbon is not visible on the gateway, so payment completion cannot be detected safely - STOPPED BEFORE Pay now (nothing paid)"
+
+      # Payment - tap Pay now ONCE, never retried; never re-run the journey after this point
+      - tapOn:
+          text: "Pay now"
+          retryTapIfNoChange: false
+      - evalScript: "${console.log('PAY NOW SUBMITTED ONCE - ' + output.cardMasked + ', fee [' + output.bookingFee + ']. Do NOT re-run this journey automatically from here.')}"
+
+      # Wait for payment terminal state (app left foreground or Sakani screen); never relaunch
+      # while processing. No terminal state -> FAIL, investigate the booking read-only
+      - evalScript: ${output.payTerminal = ''}
+      - repeat:
+          times: 12
+          commands:
+            - runFlow:
+                when:
+                  true: ${output.payTerminal === ''}
+                commands:
+                  - runFlow:
+                      when:
+                        notVisible: 'PRE-[0-9]+(\.[0-9]+)*-[0-9]+'
+                      commands:
+                        - evalScript: ${output.payTerminal = 'app-left-foreground'}
+                        # Confirm: ribbon returning means a transient gap, not terminal
+                        - runFlow:
+                            when:
+                              visible: 'PRE-[0-9]+(\.[0-9]+)*-[0-9]+'
+                            commands:
+                              - evalScript: ${output.payTerminal = ''}
+                  - runFlow:
+                      when:
+                        true: ${output.payTerminal === ''}
+                      commands:
+                        - runFlow:
+                            when:
+                              visible: '(Account\s*Tab 4 of 4|Booking Details\s*Tab 1 of 2)'
+                            commands:
+                              - evalScript: ${output.payTerminal = 'sakani-screen'}
+                  # Still unresolved: wait up to 5 s for a Sakani screen (ends early), then check again
+                  - runFlow:
+                      when:
+                        true: ${output.payTerminal === ''}
+                      commands:
+                        - extendedWaitUntil:
+                            visible: '(Account\s*Tab 4 of 4|Booking Details\s*Tab 1 of 2)'
+                            timeout: 5000
+                            optional: true
+      - takeScreenshot: journey-paid-8-payment-terminal
+      - evalScript: "${console.log('PAYMENT TERMINAL STATE - [' + (output.payTerminal || 'none') + ']')}"
+      - assertTrue:
+          condition: ${output.payTerminal !== ''}
+          label: "PAY - no terminal state after Pay now (gateway may still be processing) - NOT relaunched; do NOT re-run, investigate the booking read-only"
+
+      # Informational only: app left foreground after payment
+      - evalScript: ${output.appInForegroundAfterPayment = output.payTerminal === 'sakani-screen'}
+      - runFlow:
+          when:
+            true: ${output.appInForegroundAfterPayment !== true}
+          commands:
+            - evalScript: "${console.log('APP LEFT FOREGROUND after payment (see device logcat); relaunching to reach the persisted booking')}"
+
+      # Verify booking in My bookings -> Active; warm relaunch if no Account tab
+      - runFlow:
+          when:
+            notVisible: '(?s)(Account\s*Tab 4 of 4|.*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*)'
+          commands:
+            - evalScript: "${console.log('AFTER PAYMENT - no Account tab on screen; warm relaunch to Home')}"
+            - launchApp
+      # Dismiss satisfaction survey covering the tab bar
+      - runFlow:
+          file: ../subflows/clear-overlays.yaml
+          env:
+            ANCHOR: 'Account\s*Tab 4 of 4'
+      # Fast path first, shared helpers as fallback
+      - evalScript: ${output.accountReached = false}
+      - runFlow:
+          optional: true
+          commands:
+            - tapOn:
+                text: 'Account\s*Tab 4 of 4'
+                retryTapIfNoChange: false
+            - extendedWaitUntil:
+                visible: "My bookings"
+                timeout: 15000
+            - evalScript: ${output.accountReached = true}
+      - runFlow:
+          when:
+            true: ${output.accountReached !== true}
+          commands:
+            - runFlow:
+                file: ../subflows/open-account-tab.yaml
+                env:
+                  DESTINATION: "My bookings"
+      - evalScript: ${output.bookingsReached = false}
+      - runFlow:
+          optional: true
+          commands:
+            - tapOn:
+                text: "My bookings"
+                retryTapIfNoChange: false
+            - extendedWaitUntil:
+                visible: 'Active\s*Tab 2 of 4'
+                timeout: 15000
+            - evalScript: ${output.bookingsReached = true}
+      - runFlow:
+          when:
+            true: ${output.bookingsReached !== true}
+          commands:
+            - runFlow:
+                file: ../subflows/tap-until-destination.yaml
+                env:
+                  TARGET: "My bookings"
+                  DESTINATION: 'Active\s*Tab 2 of 4'
+      - evalScript: "${console.log('STAGE 6 NAVIGATION - Account fast path=' + output.accountReached + ' | My bookings fast path=' + output.bookingsReached)}"
+      - tapOn: 'Active\s*Tab 2 of 4'
+      - extendedWaitUntil:
+          visible: "(?s).*(\nActive\n.*Unit code|don.t have any active booking).*"
+          timeout: 30000
+      - takeScreenshot: journey-paid-my-bookings-active
+      - assertNotVisible:
+          text: "(?s).*don.t have any active booking.*"
+          label: "BOOKING - no Active booking exists after payment"
+
+      # Find the card by unit identity (block-unit), never by position
+      - scrollUntilVisible:
+          element:
+            text: "(?s).*\nActive\n.*\nUnit code\n[0-9]{2}(-[0-9]+)*-${output.unitBlock}-${output.unitNumber}\n.*"
+          direction: DOWN
+          timeout: 30000
+          label: "BOOKING - no Active booking for the booked unit (block ${output.unitBlock}, unit ${output.unitNumber})"
+      - copyTextFrom:
+          text: "(?s).*\nActive\n.*\nUnit code\n[0-9]{2}(-[0-9]+)*-${output.unitBlock}-${output.unitNumber}\n.*"
+      - evalScript: ${output.activeCard = String(maestro.copiedText)}
+      - evalScript: '${output.unitCode = (output.activeCard.match(/Unit code\s*([0-9]{2}(-[0-9]+)+)/) || ["", ""])[1]}'
+      - evalScript: "${console.log('PAID BOOKING - Active card [' + output.activeCard.replace(/\\n/g, ' | ') + '] unit code [' + output.unitCode + ']')}"
+      - assertTrue:
+          condition: ${output.unitCode.length > 0 && output.unitCode.slice(-(output.unitBlock.length + output.unitNumber.length + 2)) === '-' + output.unitBlock + '-' + output.unitNumber}
+          label: "BOOKING - the Active booking's unit code is not the booked unit"
+      # Payment proof: the same card must read Active then Paid
+      - assertTrue:
+          condition: ${output.activeCard.indexOf('\nActive\nPaid\n') >= 0}
+          label: "PAYMENT - the booked unit's Active card is not marked Paid"
+      - tapOn: "(?s).*\nActive\n.*\nUnit code\n${output.unitCode}\n.*"
+
+      # End: Booking Details of the new paid booking opened
+      - extendedWaitUntil:
+          visible: 'Booking Details\s*Tab 1 of 2'
+          timeout: 30000
+      - takeScreenshot: journey-paid-final-booking-details
+      - evalScript: "${console.log('FULL JOURNEY PAID END - paid booking created and opened successfully, unit code [' + output.unitCode + '], block [' + output.unitBlock + '], unit [' + output.unitNumber + '], fee [' + output.bookingFee + '] paid with ' + output.cardMasked + ' | payment terminal state [' + output.payTerminal + '] | app stayed in foreground after payment=' + output.appInForegroundAfterPayment + ' (informational)')}"

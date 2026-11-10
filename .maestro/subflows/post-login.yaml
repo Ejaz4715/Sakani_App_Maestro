@@ -1,0 +1,86 @@
+# Post-Confirm state machine: return only on a Home greeting the user by name.
+# Safety: never taps "Update information"/"Update email" or the weekly-deal CTA.
+appId: fi.iwa.sakani
+name: Post-authentication - from Nafath Confirm to authenticated Home
+---
+# Nafath screen gone after Confirm (not proof of success)
+- extendedWaitUntil:
+    notVisible: "Login with nafath"
+    timeout: 90000
+
+# Clear post-login overlays; anchor also stops on the promo or the login page.
+# Only caller that opts out of the exit contract (output.anchorOptional).
+- evalScript: ${output.anchorOptional = true}
+- runFlow:
+    file: clear-overlays.yaml
+    env:
+      ANCHOR: '(?si)((Hello|Good (morning|afternoon|evening)),\s*\S.*|New service|Go to the weekly (offer|deal)|Continue with N[ae]fath)'
+- evalScript: ${output.anchorOptional = false}
+# Weekly-deal promo: Back closes it; Workaround: first Back may only close the keyboard.
+# Safety: never tap the "Go to the weekly deal" CTA.
+- runFlow:
+    when:
+      visible: "New service"
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Go to the weekly (offer|deal)"
+          commands:
+            - back
+            - waitForAnimationToEnd:
+                timeout: 3000
+- runFlow:
+    when:
+      visible: "Go to the weekly (offer|deal)"
+    commands:
+      - evalScript: "${console.log('LOGIN - weekly-deal promo is up; closing it with Back, no relaunch')}"
+      - repeat:
+          times: 3
+          while:
+            visible: "Go to the weekly (offer|deal)"
+          commands:
+            - back
+            - waitForAnimationToEnd:
+                timeout: 4000
+      - assertNotVisible: "Go to the weekly (offer|deal)"
+      # Skip overlay clearing if Back revealed the login page (handled by recovery below)
+      - runFlow:
+          when:
+            notVisible: "Continue with N[ae]fath"
+          commands:
+            - runFlow:
+                file: clear-overlays.yaml
+                env:
+                  ANCHOR: '(?si)((Hello|Good (morning|afternoon|evening)),\s*\S.*|Continue with N[ae]fath)'
+
+# Login-page recovery: relaunch once keeping the session; never re-submit login
+- runFlow:
+    when:
+      visible: "Continue with N[ae]fath"
+    commands:
+      - evalScript: "${console.log('LOGIN RECOVERY - back on the login page after authentication, relaunching with state kept')}"
+      - launchApp
+      - runFlow:
+          file: clear-overlays.yaml
+          env:
+            ANCHOR: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+
+
+# Wait for named greeting, handling the NPS survey each round (known defect guard)
+- repeat:
+    times: 6
+    while:
+      notVisible: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+    commands:
+      - extendedWaitUntil:
+          visible: '(?si)((Hello|Good (morning|afternoon|evening)),\s*\S.*|.*(?:would you recommend benefiting from Sakani|likely are you to recommend Sakani App).*)'
+          timeout: 90000
+      - runFlow:
+          file: dismiss-nps.yaml
+
+# One last NPS dismissal right before the proof
+- runFlow:
+    file: dismiss-nps.yaml
+# Verify authenticated Home greets the user by name
+- assertVisible: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+- assertNotVisible: "(?s).*Login / Sign up.*"

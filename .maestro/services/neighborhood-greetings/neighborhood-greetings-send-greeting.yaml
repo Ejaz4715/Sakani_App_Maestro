@@ -1,0 +1,99 @@
+# TC-012: a greeting is sent and recorded (STATE-CHANGING, writes-data)
+# Run ONCE per sender with --env NATIONAL_ID; never as 1000011487; never retried
+appId: fi.iwa.sakani
+name: SAKANI-38946-TC-012 A greeting is sent and recorded (STATE-CHANGING)
+tags: [sakani-38946, sakani-29885, neighborhood-greetings, service, functional, writes-data, health-check]
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "" : String(NATIONAL_ID)}'
+---
+- assertTrue:
+    condition: ${String(NATIONAL_ID).length === 10 && String(NATIONAL_ID) !== "1000011487"}
+    label: "Sender must be passed with --env NATIONAL_ID and must not be the suite account 1000011487"
+
+- stopApp
+- launchApp
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+
+# Capture greeting count before
+- copyTextFrom: "(?s)[0-9]+ greetings? & [0-9]+ events?"
+- evalScript: ${output.greetingsBefore = parseInt(String(maestro.copiedText), 10)}
+- evalScript: "${console.log('TC-012 sender ' + NATIONAL_ID + ' - Shared moments before = ' + maestro.copiedText)}"
+
+# Compose, choose the neighbour, review
+- runFlow:
+    file: subflows/open-create-chooser.yaml
+- runFlow:
+    file: subflows/compose-greeting.yaml
+- repeat:
+    times: 4
+    while:
+      notVisible: "(?s).*Seventh Neighbor Map.*"
+    commands:
+      - tapOn:
+          text: "Continue"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 8000
+- extendedWaitUntil:
+    visible: "(?s).*Building number: [0-9]+.*"
+    timeout: 30000
+- tapOn: "List view"
+- extendedWaitUntil:
+    visible: "Select neighbor"
+    timeout: 30000
+# Neighbour must arrive selected and not already greeted
+- assertVisible: "(?s)[0-9]+ Neighbors?"
+- assertVisible: "Unselect all"
+- takeScreenshot: sakani-38946-tc-012-01-recipient-selected
+- tapOn: "Confirm neighbor"
+- extendedWaitUntil:
+    visible: "Review Greetings"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "(?s).*Show my name.*"
+    timeout: 20000
+- assertVisible: "(?s).*Show my phone number.*"
+- assertVisible: "Send greeting card"
+- takeScreenshot: sakani-38946-tc-012-02-review-before-send
+
+# State-changing: sends a real greeting, exactly one tap
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Send greeting card"
+# Wait for success or refusal
+- extendedWaitUntil:
+    visible: "(?s).*(Greeting on its way|You have sent greetings to the same neighbor before|rror|went wrong|try again).*"
+    timeout: 90000
+- takeScreenshot: sakani-38946-tc-012-03-outcome
+- assertNotVisible: "(?s).*(You have sent greetings to the same neighbor before|rror|went wrong).*"
+- assertVisible: "Greeting on its way!"
+- assertVisible: "(?s).*Your neighbor will smile when they see it.*"
+
+# Verify greeting count rose by exactly 1
+- tapOn: "Got it"
+- runFlow:
+    file: subflows/dismiss-late-survey.yaml
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 45000
+- takeScreenshot: sakani-38946-tc-012-04-redirected-to-dashboard
+- runFlow:
+    file: subflows/open-seventh-neighbor.yaml
+- copyTextFrom: "(?s)[0-9]+ greetings? & [0-9]+ events?"
+- evalScript: "${console.log('TC-012 Shared moments after = ' + maestro.copiedText)}"
+- assertTrue:
+    condition: ${parseInt(String(maestro.copiedText), 10) === output.greetingsBefore + 1}
+    label: "The Shared-moments greeting count rose by exactly 1 after the send"
+- takeScreenshot: sakani-38946-tc-012-05-shared-moments-after
+
+# Verify History holds the sent greeting
+- runFlow:
+    file: subflows/open-header-screen.yaml
+    env:
+      POINT: "80%,9%"
+      DESTINATION: "History"
+- extendedWaitUntil:
+    visible: "(?s).*You sent a greeting.*To [0-9]+.*"
+    timeout: 30000
+- takeScreenshot: sakani-38946-tc-012-06-history-record

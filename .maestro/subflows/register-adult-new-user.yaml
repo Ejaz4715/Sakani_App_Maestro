@@ -1,0 +1,34 @@
+# Register ONE new adult user on PRE (called by e2e/check-eligibility.yaml).
+# Test-data window: run only at minute 25-55, else stop as TEST DATA BLOCKER.
+appId: fi.iwa.sakani
+name: Eligibility journey - register one adult new user
+---
+# 1. PRE test-data window check (no wait, no retry)
+- evalScript: ${output.currentMinute = new Date().getMinutes()}
+- runFlow:
+    when:
+      true: ${!(output.currentMinute >= 25 && output.currentMinute <= 55)}
+    commands:
+      - evalScript: "${console.log('TEST DATA BLOCKER - PRE mock applicant age is based on the current minute. Current minute [' + output.currentMinute + '] is outside the supported adult window 25-55. No identity was generated and no account was created.')}"
+- assertTrue:
+    condition: ${output.currentMinute >= 25 && output.currentMinute <= 55}
+    label: "TEST DATA BLOCKER - PRE mock applicant age is based on the current minute. Current minute (logged above) is outside the supported adult window 25-55. No identity was generated and no account was created."
+
+# 2. Generate the one identity for this run
+- evalScript: ${output.generatedNationalId = String(Math.floor(1000000000 + Math.random() * 1000000000))}
+- evalScript: ${output.generatedPhone = String(Math.floor(500000000 + Math.random() * 10000000))}
+- evalScript: ${output.generatedEmail = 'elig.' + output.generatedNationalId + '@example.com'}
+- evalScript: "${console.log('NEW USER - National ID [' + output.generatedNationalId + '] phone [+966' + output.generatedPhone + '] email [' + output.generatedEmail + '] - started at minute ' + output.currentMinute)}"
+
+# 3. Register it (age > 24 Hijri required); any failure fails the run
+- launchApp:
+    clearState: true
+- runFlow:
+    file: register-new-user.yaml
+    env:
+      NATIONAL_ID: ${output.generatedNationalId}
+      PHONE: ${output.generatedPhone}
+      EMAIL: ${output.generatedEmail}
+      OTP: ${REGISTRATION_OTP}
+      MIN_AGE_HIJRI_YEARS: "24"
+- evalScript: "${console.log('ELIGIBILITY NEW USER - National ID [' + output.generatedNationalId + '] DOB [' + output.applicantDobHijri + '] age ' + output.applicantAgeHijri + ' Hijri years - registered (the only registration of this run)')}"

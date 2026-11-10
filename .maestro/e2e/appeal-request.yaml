@@ -1,0 +1,65 @@
+# Appeal Request E2E: existing Not Eligible PRE user, no existing appeal -> ONE appeal.
+# Writes data only with APPEAL_SUBMIT_APPROVED=true; never registers, re-runs eligibility or books.
+appId: fi.iwa.sakani
+name: Appeal Request - Not Eligible User
+tags:
+  - e2e
+  - eligibility
+  - appeal
+  - critical
+  - release-readiness
+env:
+  # Existing PRE user with a persisted Not Eligible result (test data)
+  NOT_ELIGIBLE_NATIONAL_ID: '${typeof NOT_ELIGIBLE_NATIONAL_ID === "undefined" ? "1330325122" : String(NOT_ELIGIBLE_NATIONAL_ID)}'
+  APPEAL_TEXT: '${typeof APPEAL_TEXT === "undefined" ? "Automation test appeal - PRE environment" : String(APPEAL_TEXT)}'
+  # Final Submit needs explicit approval: -e APPEAL_SUBMIT_APPROVED=true (else stops before Submit)
+  APPEAL_SUBMIT_APPROVED: '${typeof APPEAL_SUBMIT_APPROVED === "undefined" ? "false" : String(APPEAL_SUBMIT_APPROVED)}'
+---
+- assertTrue:
+    condition: ${String(NOT_ELIGIBLE_NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NOT_ELIGIBLE_NATIONAL_ID))}
+    label: "TEST DATA - NOT_ELIGIBLE_NATIONAL_ID is not a 10-digit National ID"
+
+# Login with existing user
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NOT_ELIGIBLE_NATIONAL_ID}
+- runFlow:
+    file: ../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+# Session must belong to this user
+- runFlow:
+    file: ../subflows/verify-signed-in-account.yaml
+    env:
+      NATIONAL_ID: ${NOT_ELIGIBLE_NATIONAL_ID}
+- evalScript: "${console.log('APPEAL - signed in as the Not Eligible test user [' + output.profileNationalId + ']')}"
+
+# Open persisted eligibility result (never a new assessment)
+- evalScript: ${output.accountService = "(?s)Eligibility checker status.*"}
+- runFlow:
+    file: ../subflows/open-account-service.yaml
+- waitForAnimationToEnd:
+    timeout: 15000
+# Stop point: no completed eligibility result
+- runFlow:
+    when:
+      visible: "Start Eligibility checker"
+    commands:
+      - takeScreenshot: appeal-00-no-eligibility-result
+      - assertTrue:
+          condition: ${false}
+          label: "TEST DATA UNSUITABLE - no completed Eligibility result exists (Eligibility is never run from this scenario)"
+- extendedWaitUntil:
+    visible: "Checked on"
+    timeout: 30000
+    label: "ELIGIBILITY - the persisted Eligibility status page did not open"
+
+# Appeal steps; Submit (state-changing, once) only when approved, then verify it persisted
+- runFlow:
+    file: ../subflows/submit-appeal.yaml
+    env:
+      APPEAL_TEXT: ${APPEAL_TEXT}
+      APPEAL_SUBMIT_APPROVED: ${APPEAL_SUBMIT_APPROVED}

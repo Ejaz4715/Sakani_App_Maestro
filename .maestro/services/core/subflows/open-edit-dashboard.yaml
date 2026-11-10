@@ -1,0 +1,15 @@
+# Helper: open Edit Dashboard from Home (navigation only; no widget assumptions)
+appId: fi.iwa.sakani
+name: Open Edit Dashboard
+---
+- scrollUntilVisible:
+    element:
+      text: "Edit Dashboard"
+    direction: DOWN
+    timeout: 40000
+- tapOn: "Edit Dashboard"
+- extendedWaitUntil:
+    visible: "Deactivated widgets"
+    timeout: 15000
+- assertVisible: "Reset"
+- assertVisible: "Confirm"

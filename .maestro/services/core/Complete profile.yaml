@@ -1,0 +1,162 @@
+# Complete profile: complete only missing items, then prove the completed state
+# writes-data: run with --yes-i-understand-this-changes-business-data
+appId: fi.iwa.sakani
+name: Complete profile - state-aware completion of House preferences and Financial advisory
+tags:
+  - core
+  - health-check
+  - writes-data
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+  # House preferences test data
+  PREF_REGION_SEARCH: '${typeof PREF_REGION_SEARCH === "undefined" ? "Riyadh" : String(PREF_REGION_SEARCH)}'
+  PREF_REGION: '${typeof PREF_REGION === "undefined" ? "Riyadh" : String(PREF_REGION)}'
+  # City has no default: needed only when House preferences are missing (else nothing is saved)
+  PREF_CITY_SEARCH: '${typeof PREF_CITY_SEARCH === "undefined" ? "" : String(PREF_CITY_SEARCH)}'
+  PREF_CITY: '${typeof PREF_CITY === "undefined" ? "" : String(PREF_CITY)}'
+  # Financial advisory inputs (FA suite defaults)
+  PRODUCT_TYPE: '${typeof PRODUCT_TYPE === "undefined" ? "Market Ready Unit" : String(PRODUCT_TYPE)}'
+  INCOME: '${typeof INCOME === "undefined" ? "20000" : String(INCOME)}'
+  HOUSING_ALLOWANCE: '${typeof HOUSING_ALLOWANCE === "undefined" ? "2000" : String(HOUSING_ALLOWANCE)}'
+  OTHER_ALLOWANCES: '${typeof OTHER_ALLOWANCES === "undefined" ? "500" : String(OTHER_ALLOWANCES)}'
+  COMMITMENTS: '${typeof COMMITMENTS === "undefined" ? "1000" : String(COMMITMENTS)}'
+  COMMITMENT_MONTHS: '${typeof COMMITMENT_MONTHS === "undefined" ? "24" : String(COMMITMENT_MONTHS)}'
+  SAVINGS: '${typeof SAVINGS === "undefined" ? "50000" : String(SAVINGS)}'
+  DOWN_PAYMENT: '${typeof DOWN_PAYMENT === "undefined" ? "0" : String(DOWN_PAYMENT)}'
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+# 1. Starting state (wait for loaded Home greeting first)
+- extendedWaitUntil:
+    visible: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- evalScript: ${output.housingDone = false}
+- evalScript: ${output.faDone = false}
+- evalScript: ${output.profileOffered = false}
+- runFlow:
+    when:
+      visible: "(?s).*Complete your profile to access.*Complete profile"
+    commands:
+      - evalScript: ${output.profileOffered = true}
+- runFlow:
+    when:
+      true: ${output.profileOffered}
+    commands:
+      - runFlow:
+          file: subflows/open-profile-completion.yaml
+      - runFlow:
+          when:
+            visible: '(?s)House preferences\s*Completed'
+          commands:
+            - evalScript: ${output.housingDone = true}
+      - runFlow:
+          when:
+            visible: '(?s)Financial advisory\s*Completed'
+          commands:
+            - evalScript: ${output.faDone = true}
+      - takeScreenshot: complete-profile-1-starting-state
+- runFlow:
+    when:
+      true: ${!output.profileOffered}
+    commands:
+      - evalScript: ${output.housingDone = true}
+      - evalScript: ${output.faDone = true}
+- evalScript: "${console.log('COMPLETE PROFILE START - account ' + NATIONAL_ID + ' | offered=' + output.profileOffered + ' | House preferences done=' + output.housingDone + ' | Financial advisory done=' + output.faDone)}"
+
+# 2. House preferences - only when missing; needs an explicit PREF_CITY (no default), else stops before saving
+- runFlow:
+    when:
+      true: ${!output.housingDone && String(PREF_CITY).trim().length === 0}
+    commands:
+      - takeScreenshot: complete-profile-2-house-preferences-no-city
+      - assertTrue:
+          condition: ${false}
+          label: "BLOCKED - TEST DATA - House preferences are missing and no PREF_CITY was supplied (-e PREF_CITY=...) - nothing was saved"
+# State-changing: Save once
+- runFlow:
+    when:
+      true: ${!output.housingDone}
+    file: subflows/complete-house-preferences.yaml
+    env:
+      PREF_REGION_SEARCH: ${PREF_REGION_SEARCH}
+      PREF_REGION: ${PREF_REGION}
+      PREF_CITY_SEARCH: '${String(PREF_CITY_SEARCH).trim().length > 0 ? PREF_CITY_SEARCH : PREF_CITY}'
+      PREF_CITY: ${PREF_CITY}
+
+# 3. Financial advisory - only when missing; State-changing: one submission, never retried
+- runFlow:
+    when:
+      true: ${!output.faDone}
+    commands:
+      - stopApp
+      - launchApp
+      - runFlow:
+          file: ../financial-advisor/subflows/open-financial-advisory.yaml
+      - runFlow:
+          file: ../financial-advisor/subflows/fill-fa-form.yaml
+          env:
+            PRODUCT_TYPE: ${PRODUCT_TYPE}
+            INCOME: ${INCOME}
+            HOUSING_ALLOWANCE: ${HOUSING_ALLOWANCE}
+            OTHER_ALLOWANCES: ${OTHER_ALLOWANCES}
+            COMMITMENTS: ${COMMITMENTS}
+            COMMITMENT_MONTHS: ${COMMITMENT_MONTHS}
+            SAVINGS: ${SAVINGS}
+            DOWN_PAYMENT: ${DOWN_PAYMENT}
+      - assertVisible: ${PRODUCT_TYPE}
+      - runFlow:
+          file: ../financial-advisor/subflows/submit-fa.yaml
+      - extendedWaitUntil:
+          visible: "Success!"
+          timeout: 60000
+      - takeScreenshot: complete-profile-3-fa-success
+      - tapOn: "Done"
+      - runFlow:
+          file: ../financial-advisor/subflows/open-financial-advisory.yaml
+      - extendedWaitUntil:
+          visible: "Purchasing power"
+          timeout: 45000
+
+# 4. Final state after relaunch (Eligibility is out of scope: its own E2E flow)
+- stopApp
+- launchApp
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+- waitForAnimationToEnd:
+    timeout: 4000
+# Wait for loaded Home (greeting), not the skeleton
+- extendedWaitUntil:
+    visible: '(?si)(Hello|Good (morning|afternoon|evening)),\s*\S.*'
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: complete-profile-4-home-after
+- runFlow:
+    when:
+      visible: "(?s).*Complete your profile to access.*Complete profile"
+    commands:
+      - runFlow:
+          file: subflows/open-profile-completion.yaml
+      - assertVisible: '(?s)House preferences\s*Completed'
+      - assertVisible: '(?s)Financial advisory\s*Completed'
+      - takeScreenshot: complete-profile-5-completed
+- runFlow:
+    when:
+      notVisible: "(?s).*Complete your profile to access.*Complete profile"
+    commands:
+      # Home no longer offers profile completion
+      - assertNotVisible: "(?s).*Steps? to be completed.*"
+      - evalScript: "${console.log('COMPLETE PROFILE END - Home no longer offers profile completion')}"

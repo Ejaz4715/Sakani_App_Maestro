@@ -1,0 +1,67 @@
+{
+  "_note": "Service flow file names: Jira test-case ID (former file name) -> readable file name. Renamed 11/10/2026. The Jira ID remains inside each flow (header 'Test Case:' line, name:, tags) for traceability.",
+  "financial-advisor": {
+    "SAKANI-23300-E2E-001": "financial-advisor-e2e",
+    "SAKANI-23300-TC-001": "financial-advisor-market-ready-recommendation",
+    "SAKANI-23300-TC-002": "financial-advisor-offplan-certification",
+    "SAKANI-23300-TC-003": "financial-advisor-last-call-wins",
+    "SAKANI-23300-TC-004": "financial-advisor-timestamp-zero-padded"
+  },
+  "mortgage-calculator": {
+    "SAKANI-32007-E2E-001": "mortgage-calculator-e2e",
+    "SAKANI-32007-TC-001": "mortgage-calculator-happy-path",
+    "SAKANI-32007-TC-002": "mortgage-calculator-required-field-blocks",
+    "SAKANI-32007-TC-002B": "mortgage-calculator-required-radios-enforced",
+    "SAKANI-32007-TC-003": "mortgage-calculator-obligations-equal-income",
+    "SAKANI-32007-TC-004": "mortgage-calculator-low-funding-hint",
+    "SAKANI-32007-TC-005": "mortgage-calculator-salary-allowance-exceeded",
+    "SAKANI-32007-TC-005B": "mortgage-calculator-msg04-shows-amounts",
+    "SAKANI-32007-TC-006": "mortgage-calculator-down-payment-bounds",
+    "SAKANI-32007-TC-007": "mortgage-calculator-funding-period-bounds",
+    "SAKANI-32007-TC-008": "mortgage-calculator-clear-resets-form",
+    "SAKANI-32007-TC-009": "mortgage-calculator-result-navigation",
+    "SAKANI-32007-TC-010": "mortgage-calculator-result-consistency",
+    "SAKANI-32007-TC-011": "mortgage-calculator-principal-funding-model",
+    "SAKANI-32007-TC-012": "mortgage-calculator-relaunch-discards-result",
+    "SAKANI-32007-TC-012B": "mortgage-calculator-inputs-not-retained",
+    "SAKANI-32007-TC-016": "mortgage-calculator-brd-conformance"
+  },
+  "neighborhood-greetings": {
+    "SAKANI-38946-E2E-001": "neighborhood-greetings-e2e",
+    "SAKANI-38946-TC-001": "neighborhood-greetings-opens-from-quick-access",
+    "SAKANI-38946-TC-002": "neighborhood-greetings-create-chooser",
+    "SAKANI-38946-TC-003": "neighborhood-greetings-greeting-catalogue",
+    "SAKANI-38946-TC-004": "neighborhood-greetings-greeting-card",
+    "SAKANI-38946-TC-005": "neighborhood-greetings-neighbour-map",
+    "SAKANI-38946-TC-006": "neighborhood-greetings-history",
+    "SAKANI-38946-TC-007": "neighborhood-greetings-notification-preferences",
+    "SAKANI-38946-TC-008": "neighborhood-greetings-event-form-validation",
+    "SAKANI-38946-TC-009": "neighborhood-greetings-event-description-limit",
+    "SAKANI-38946-TC-010": "neighborhood-greetings-quick-access-only",
+    "SAKANI-38946-TC-011": "neighborhood-greetings-address-chooser"
+  },
+  "real-estate-tax": {
+    "SAKANI-23459-E2E-001": "real-estate-tax-e2e",
+    "SAKANI-23459-TC-001": "real-estate-tax-service-page",
+    "SAKANI-23459-TC-002": "real-estate-tax-eligible-user-not-blocked",
+    "SAKANI-23459-TC-003": "real-estate-tax-profile-exemption-status",
+    "SAKANI-23459-TC-004": "real-estate-tax-no-duplicate-certificate",
+    "SAKANI-23459-TC-005": "real-estate-tax-ineligible-request-blocked",
+    "SAKANI-23459-TC-006": "real-estate-tax-profile-prompts-eligibility"
+  },
+  "sakani-offers": {
+    "SAKANI-31966-E2E-001": "sakani-offers-e2e",
+    "SAKANI-31966-TC-001": "sakani-offers-voucher-list",
+    "SAKANI-31966-TC-002": "sakani-offers-details-page",
+    "SAKANI-31966-TC-003": "sakani-offers-support-sheet",
+    "SAKANI-31966-TC-004": "sakani-offers-join-us-validation",
+    "SAKANI-31966-TC-005": "sakani-offers-filters",
+    "SAKANI-31966-TC-006": "sakani-offers-creation-date"
+  },
+  "cancel-ready-made": {
+    "SAKANI-51392-E2E-001": "cancel-ready-made-e2e",
+    "SAKANI-51392-TC-001": "cancel-ready-made-prepared-booking-active",
+    "SAKANI-51392-TC-002": "cancel-ready-made-booking-details",
+    "SAKANI-51392-TC-004": "cancel-ready-made-fa-blocks-cancellation"
+  }
+}

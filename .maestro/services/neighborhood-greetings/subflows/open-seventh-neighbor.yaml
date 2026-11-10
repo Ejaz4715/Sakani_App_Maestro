@@ -1,0 +1,51 @@
+# Helper: Home -> Quick Access -> Seventh Neighbor -> main screen
+# Safety: never taps Start Connecting (publishes the user on the map); sheet closed by X
+appId: fi.iwa.sakani
+name: Open the Seventh Neighbor service
+---
+- runFlow:
+    file: ../../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+# Quick Access rail is below the fold
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Seventh Neighbor.*"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- tapOn: "(?s).*Seventh Neighbor.*"
+
+# About service is shown on first entry only
+- extendedWaitUntil:
+    visible: "(?s)(Start now|Shared moments)"
+    timeout: 45000
+- runFlow:
+    when:
+      visible: "Start now"
+    commands:
+      - assertVisible: "About service"
+      - tapOn: "Start now"
+
+# Wait for the main screen or the first-run connect sheet
+- extendedWaitUntil:
+    visible: "(?s)(Shared moments|Start Connecting)"
+    timeout: 45000
+
+# Close the first-run sheet by its X, never accept it
+- runFlow:
+    when:
+      visible: "Start Connecting"
+    commands:
+      - tapOn:
+          point: "10%,35%"
+      - waitForAnimationToEnd:
+          timeout: 5000
+
+- assertNotVisible: "Start Connecting"
+
+# Verify the main screen
+- extendedWaitUntil:
+    visible: "Shared moments"
+    timeout: 45000

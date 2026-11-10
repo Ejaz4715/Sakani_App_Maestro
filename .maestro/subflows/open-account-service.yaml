@@ -1,0 +1,46 @@
+# Open output.accountService from Account using at most six upward swipes.
+appId: fi.iwa.sakani
+name: Open a reachable Account service
+---
+- runFlow:
+    file: account-ready.yaml
+- repeat:
+    times: 6
+    while:
+      notVisible:
+        text: ${output.accountService}
+        enabled: true
+        width: 996
+        height: 147
+        tolerance: 4
+        below:
+          text: '(?s)(Account|Hello\s.*)'
+        above:
+          text: 'Home\s*Tab 1 of 4'
+    commands:
+      - swipe:
+          start: "50%,80%"
+          end: "50%,40%"
+          duration: 500
+      - waitForAnimationToEnd:
+          timeout: 2000
+- assertVisible:
+    text: ${output.accountService}
+    enabled: true
+    width: 996
+    height: 147
+    tolerance: 4
+    below:
+      text: '(?s)(Account|Hello\s.*)'
+    above:
+      text: 'Home\s*Tab 1 of 4'
+- tapOn:
+    text: ${output.accountService}
+    enabled: true
+    width: 996
+    height: 147
+    tolerance: 4
+    below:
+      text: '(?s)(Account|Hello\s.*)'
+    above:
+      text: 'Home\s*Tab 1 of 4'

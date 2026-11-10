@@ -1,0 +1,26 @@
+# Helper: from the create chooser, pick a live greeting tag and land on the composed card
+appId: fi.iwa.sakani
+name: Compose a greeting up to the card screen
+---
+- tapOn: "Create Greetings"
+- extendedWaitUntil:
+    visible: "test tag 1"
+    timeout: 45000
+
+# Workaround: early card taps are swallowed; settle, then re-tap while on the catalogue
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    times: 3
+    while:
+      visible: "test tag 1"
+      notVisible: "Continue"
+    commands:
+      - tapOn:
+          point: "82%,21%"
+      - waitForAnimationToEnd:
+          timeout: 5000
+- extendedWaitUntil:
+    visible: "Continue"
+    timeout: 45000
+- assertVisible: "Change message"

@@ -1,0 +1,100 @@
+# Wallet regression (read-only): WAL-007, WAL-008, WAL-009, WAL-010
+# WAL-010 is the D-31 guard, last and expected to fail while open
+appId: fi.iwa.sakani
+name: WAL-008 over-balance withdrawal blocked, WAL-009 amount formatting, WAL-010 D-31 Back guard
+tags:
+  - health-check
+env:
+  # Test account (needs a positive wallet balance)
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1012204739" : String(NATIONAL_ID)}'
+---
+# Fail fast on empty or malformed NATIONAL_ID
+- evalScript: ${console.log('WALLET.YAML TARGET NATIONAL_ID = [' + NATIONAL_ID + ']')}
+- assertTrue: ${String(NATIONAL_ID).length === 10 && !/[^0-9]/.test(String(NATIONAL_ID)) && (String(NATIONAL_ID).charAt(0) === "1" || String(NATIONAL_ID).charAt(0) === "2")}
+- launchApp:
+    clearState: true
+
+# Login with test account
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+
+# Open Account (handles NPS)
+- runFlow:
+    file: ../../subflows/open-account-tab.yaml
+    env:
+      DESTINATION: "My bookings"
+- assertNotVisible: "Log in"
+
+# WAL-008: over-balance withdrawal rejected (WAL-007, WAL-009); never submitted
+- tapOn: "(?s).*Wallet.*"
+- extendedWaitUntil:
+    visible: "Available Balance"
+    timeout: 30000
+- assertVisible: "Reserved Balance"
+- assertVisible: "Total Balance"
+# Wallet loaded
+- assertVisible: "Transaction( history)?"
+
+# Precondition: positive balance required (stops with a test-data failure otherwise)
+- assertNotVisible:
+    text: "0(\\.00)?"
+    below: "Available Balance"
+    above: "Reserved Balance"
+    label: "PRECONDITION - WAL-008 needs a positive Available Balance on NATIONAL_ID (test data)"
+
+- tapOn: "Withdraw"
+- extendedWaitUntil:
+    visible: "Use max balance"
+    timeout: 30000
+
+# WAL-007: empty amount - disabled Withdraw button does nothing
+- tapOn:
+    below:
+      text: "Designed to Keep You Safe"
+- waitForAnimationToEnd:
+    timeout: 8000
+- assertVisible: "Use max balance"
+- assertVisible: "(?s).*Wallet balance.*"
+
+# Amount field right of SAR prefix; Use max balance is never tapped
+- tapOn:
+    rightOf:
+      text: "SAR"
+- inputText: "999999999"
+
+# WAL-009: amount auto-formatted
+- extendedWaitUntil:
+    visible: "999,999,999"
+    timeout: 20000
+
+# WAL-008: over-balance amount rejected inline
+- extendedWaitUntil:
+    visible: "The amount exceeds the available balance."
+    timeout: 20000
+
+# Back out of the Withdraw form until Wallet shows (keyboard swallows first Back)
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Transaction( history)?"
+          commands:
+            - back
+            - waitForAnimationToEnd:
+                timeout: 6000
+- extendedWaitUntil:
+    visible: "Transaction( history)?"
+    timeout: 30000
+- assertVisible: "Available Balance"
+
+# WAL-010: Known defect guard (D-31) - Back must exit Wallet; expected to fail
+# Keep as written: never replace with the header arrow
+- back
+- extendedWaitUntil:
+    visible: "Profile details"
+    timeout: 30000
+- assertVisible: "My bookings"
+- assertNotVisible: "Available Balance"

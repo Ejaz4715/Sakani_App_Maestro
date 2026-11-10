@@ -1,0 +1,116 @@
+# Clear the form, then fill it top-down by placeholder - keep the field order
+# Env: six input values; BENEFICIARY and FIRST_HOME take yes, no or skip
+appId: fi.iwa.sakani
+name: Fill the Mortgage Calculator form
+env:
+  BENEFICIARY: '${typeof BENEFICIARY === "undefined" ? "yes" : String(BENEFICIARY)}'
+  FIRST_HOME: '${typeof FIRST_HOME === "undefined" ? "yes" : String(FIRST_HOME)}'
+---
+- tapOn: "Clear"
+- waitForAnimationToEnd:
+    timeout: 4000
+
+# Property Price
+- tapOn:
+    text: "0"
+    index: 0
+- inputText: ${PRICE}
+- hideKeyboard
+
+# Monthly Income
+- tapOn:
+    text: "0"
+    index: 0
+- inputText: ${INCOME}
+- hideKeyboard
+
+# Monthly Obligations
+- tapOn:
+    text: "0"
+    index: 0
+- inputText: ${OBLIGATIONS}
+- hideKeyboard
+
+# Funding period
+- tapOn: "enter a number"
+- inputText: ${YEARS}
+- hideKeyboard
+
+# Annual Interest Rate
+- tapOn:
+    text: "enter a percentage"
+    index: 0
+- inputText: ${RATE}
+- hideKeyboard
+
+# Down Payment Percentage
+- tapOn:
+    text: "enter a percentage"
+    index: 0
+- inputText: ${DOWN_PAYMENT}
+- hideKeyboard
+
+# Close the keypad only while the IME is visible:
+# hideKeyboard with no keypad sends BACK and leaves the form
+- repeat:
+    times: 3
+    while:
+      visible:
+        id: ".*inputmethod.*"
+    commands:
+      - hideKeyboard
+      - waitForAnimationToEnd:
+          timeout: 2000
+
+# Keypad gone and still on the form before the coordinate taps
+- assertNotVisible:
+    id: ".*inputmethod.*"
+- assertVisible: "Financial information"
+
+# Scroll to the bottom clamp so the radio point taps are deterministic
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: "50%,80%"
+          end: "50%,30%"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "(?s).*Are you a beneficiary.*"
+- assertVisible: "(?s).*Is this your first home.*"
+
+# Radio groups: point taps only (no usable selectors), measured at the bottom clamp
+# Clear unsets both groups, so beneficiary must be set too
+- runFlow:
+    when:
+      true: ${BENEFICIARY === "yes"}
+    commands:
+      - tapOn:
+          point: "7%,69%"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- runFlow:
+    when:
+      true: ${BENEFICIARY === "no"}
+    commands:
+      - tapOn:
+          point: "53%,69%"
+      - waitForAnimationToEnd:
+          timeout: 2000
+
+- runFlow:
+    when:
+      true: ${FIRST_HOME === "yes"}
+    commands:
+      - tapOn:
+          point: "7%,79%"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- runFlow:
+    when:
+      true: ${FIRST_HOME === "no"}
+    commands:
+      - tapOn:
+          point: "53%,79%"
+      - waitForAnimationToEnd:
+          timeout: 2000

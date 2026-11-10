@@ -1,0 +1,37 @@
+# Open Services > Housing Support Products > Real estate tax exemption (VAT service page).
+appId: fi.iwa.sakani
+name: Open the Real estate tax (VAT) service page
+---
+# Skip catalogue navigation when already in Housing Support Products
+- runFlow:
+    when:
+      notVisible: "Housing Support Products"
+    commands:
+      - runFlow:
+          file: ../../../subflows/clear-overlays.yaml
+          env:
+            ANCHOR: 'Home\s*Tab 1 of 4'
+      - runFlow:
+          file: ../../../subflows/tap-until-destination.yaml
+          env:
+            TARGET: 'Services\s*Tab 3 of 4'
+            DESTINATION: "Categories"
+      - tapOn: "(?s).*Housing Support Products.*"
+      - extendedWaitUntil:
+          visible: "Explore Housing Support Products"
+          timeout: 45000
+
+# Centre the last card so the tap clears the bottom tab bar
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Real estate tax exemption.*"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- tapOn: "(?s).*Real estate tax exemption.*"
+
+# Verify arrival on the service page
+- extendedWaitUntil:
+    visible: "Request a service"
+    timeout: 45000
+- assertVisible: "Real estate tax"

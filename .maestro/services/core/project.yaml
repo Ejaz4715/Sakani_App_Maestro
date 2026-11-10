@@ -1,0 +1,95 @@
+# PRJ-001 / PRJ-002 - Project card opens summary and Available Units list
+# Read-only: no unit reserved, no booking CTA tapped
+appId: fi.iwa.sakani
+name: PRJ-001 Project opens Available Units list (PRJ-002 project summary)
+tags:
+  - health-check
+---
+- stopApp
+# Restart so the flow starts from the app entry (session kept)
+- launchApp
+
+# Clear launch popups until the tab bar is reachable
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Explore\s*Tab 2 of 4'
+
+# Open Explore (handles NPS survey)
+- runFlow:
+    file: ../../subflows/tap-until-destination.yaml
+    env:
+      TARGET: 'Explore\s*Tab 2 of 4'
+      DESTINATION: "Registered Interests"
+
+# Category gate (same as marketplace.yaml); skipped when sub-tabs are up
+- runFlow:
+    when:
+      notVisible: '[Uu]nits\s*Tab 2 of 2'
+    commands:
+      - tapOn: "(Construction Status|Ready Units|Readymade|Offplan|Land)"
+      # Transition proof: one of the two sheets opened
+      - extendedWaitUntil:
+          visible: "(Start searching|Apply)"
+          timeout: 15000
+      - runFlow:
+          when:
+            visible: "Start searching"
+          commands:
+            - tapOn: "Buy"
+            - tapOn: "Ready(made| Units)"
+            - tapOn: "Start searching"
+      - runFlow:
+          when:
+            visible: "Apply"
+          commands:
+            - tapOn: "Ready(made| Units)"
+            - tapOn: "Apply"
+
+- extendedWaitUntil:
+    visible: '[Uu]nits\s*Tab 2 of 2'
+    timeout: 90000
+
+# Projects sub-tab
+- tapOn: 'Projects\s*Tab 1 of 2'
+- extendedWaitUntil:
+    visible:
+      text: 'Projects\s*Tab 1 of 2'
+      selected: true
+    timeout: 30000
+
+# Open first project card (destination proven below)
+- tapOn:
+    below:
+      text: 'Projects\s*Tab 1 of 2'
+
+# Dismiss compare coach mark if shown
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: "About this project"
+
+# PRJ-002: project summary (live values asserted by shape)
+- extendedWaitUntil:
+    visible: "View units"
+    timeout: 45000
+- assertVisible: "About this project"
+- assertVisible: "(?s).*Prices start from.*"
+- assertVisible: '\d+ - \d+'
+- assertVisible: '(?s).*\d+ - \d+ m.*'
+- assertVisible: "(?s).*available units.*"
+
+# PRJ-001: project opens its Available Units list
+- tapOn: "View units"
+
+# Units screen opens on Unit list tab
+- extendedWaitUntil:
+    visible:
+      text: "(?s)Unit list.*Tab 1 of 2"
+      selected: true
+    timeout: 45000
+- assertVisible: "(?s)Project details.*Tab 2 of 2"
+
+# Sort/filter chips are project-dependent: assert at least one known control
+- assertVisible: "(Price|Area size|Property type|Bedroom|Bathroom|Block)"
+- assertVisible: "(?s).*[0-9]+ available units.*"

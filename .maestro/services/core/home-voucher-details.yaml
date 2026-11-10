@@ -1,0 +1,41 @@
+# Home Vouchers: voucher opened from Home shows its details; Back returns to Home
+# View-only: no voucher action is tapped (Copy, Share, Go to website, Redeem now)
+appId: fi.iwa.sakani
+name: Home voucher opens its own details and Back returns to Home
+tags:
+  - health-check
+env:
+  NATIONAL_ID: '${typeof NATIONAL_ID === "undefined" ? "1000011487" : String(NATIONAL_ID)}'
+  HOME_VOUCHER_TITLE: '${typeof HOME_VOUCHER_TITLE === "undefined" ? "Test Company name EN with only 1 EN attachment" : String(HOME_VOUCHER_TITLE)}'
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: ../../subflows/login.yaml
+    env:
+      NATIONAL_ID: ${NATIONAL_ID}
+- runFlow:
+    file: ../../subflows/clear-overlays.yaml
+    env:
+      ANCHOR: 'Home\s*Tab 1 of 4'
+
+# Home Vouchers section and card
+- runFlow:
+    file: subflows/open-home-voucher.yaml
+    env:
+      HOME_VOUCHER_TITLE: ${HOME_VOUCHER_TITLE}
+
+# Details match the selected card
+- runFlow:
+    file: subflows/assert-voucher-details.yaml
+
+# Back returns to Home
+- back
+- extendedWaitUntil:
+    visible: 'Home\s*Tab 1 of 4'
+    timeout: 15000
+- assertVisible: "Vouchers"
+- assertVisible:
+    text: ${"(?s).*% off.*" + HOME_VOUCHER_TITLE + ".*"}
+    below: "Vouchers"
+- assertNotVisible: "(?s).*customers viewed this voucher.*"

@@ -1,0 +1,10 @@
+# Prove Account is selected at either scroll position. Read-only.
+appId: fi.iwa.sakani
+name: Prove Account screen is ready
+---
+- extendedWaitUntil:
+    visible:
+      text: 'Account\s*Tab 4 of 4'
+      selected: true
+    timeout: 30000
+- assertVisible: '(Profile details|Invoices)'
